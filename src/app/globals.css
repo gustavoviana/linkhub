@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: 109 74 224;
+  --brand-fg: 255 255 255;
+  --brand-soft: 109 74 224;
+  --accent: 10 165 192;
+  --accent-fg: 255 255 255;
+  --bg: 250 251 253;
+  --bg-2: 255 255 255;
+  --bg-3: 243 244 248;
+  --fg: 13 15 23;
+  --fg-2: 82 88 102;
+  --fg-3: 138 144 160;
+  --border: 231 232 238;
+  --success: 21 145 90;
+  --warning: 184 115 14;
+  --danger: 214 51 74;
+  --info: 38 96 212;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgb(var(--brand) / 0.2);
+  color: rgb(var(--brand));
+}
+
+input,
+select,
+textarea,
+button {
+  font-family: inherit;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Util — esconde scrollbar mantendo scroll */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
