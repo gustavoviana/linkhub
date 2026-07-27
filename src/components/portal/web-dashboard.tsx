@@ -8,11 +8,12 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
-import { NetChart } from './net-chart';
-import { PortalScreenProps, daysUntil } from './ui';
+import { NetChart, usageToSeries } from './net-chart';
+import { ConnectionCard } from './connection-card';
+import { PortalScreenProps, invoiceStanding } from './ui';
 
 export function WebDashboard(props: PortalScreenProps) {
-  const { tenant, customer, contract, plan, openInvoice, recentInvoices } = props;
+  const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = portalTokens(tenant, tenant.dark_mode_default);
   const firstName = customer.name.split(' ')[0];
 
@@ -28,7 +29,8 @@ export function WebDashboard(props: PortalScreenProps) {
       ? {
           label: 'Próxima fatura',
           value: formatBRL(openInvoice.amount_cents),
-          sub: `${dueText(openInvoice.due_date)} · ${formatDate(openInvoice.due_date)}`,
+          // Sempre a data original do vencimento, com a situação ao lado.
+          sub: `${invoiceStanding(openInvoice).label} · ${formatDate(openInvoice.due_date)}`,
           icon: 'card',
           color: t.accent,
           cta: { label: 'Pagar agora', href: `/fatura/${openInvoice.id}` },
@@ -138,14 +140,16 @@ export function WebDashboard(props: PortalScreenProps) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 14, marginBottom: 18 }}>
-        <NetChart t={t} />
+        <NetChart t={t} series={usageToSeries(usage)} />
 
         <div style={{ padding: 22, background: t.surfaceSolid, borderRadius: 14, border: `1px solid ${t.border}` }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>
             {openInvoice ? 'Pagar fatura aberta' : 'Faturas'}
           </div>
           <div style={{ fontSize: 11, color: t.text2, marginBottom: 14 }}>
-            {openInvoice ? `${dueText(openInvoice.due_date)} · ${formatDate(openInvoice.due_date)}` : 'Nada em aberto'}
+            {openInvoice
+              ? `${invoiceStanding(openInvoice).label} · vencimento ${formatDate(openInvoice.due_date)}`
+              : 'Nada em aberto'}
           </div>
 
           {openInvoice && (
@@ -318,12 +322,6 @@ export function WebDashboard(props: PortalScreenProps) {
   );
 }
 
-function dueText(due: string) {
-  const d = daysUntil(due);
-  if (d < 0) return `${Math.abs(d)} dias em atraso`;
-  if (d === 0) return 'Vence hoje';
-  return `Vence em ${d} dias`;
-}
 
 function SpeedStat({
   t,

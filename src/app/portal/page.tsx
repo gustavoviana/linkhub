@@ -8,9 +8,71 @@ import { HomeV1 } from '@/components/portal/home-v1';
 import { HomeV2 } from '@/components/portal/home-v2';
 import { HomeV3 } from '@/components/portal/home-v3';
 import { WebDashboard } from '@/components/portal/web-dashboard';
-import type { Contract, Invoice, Plan } from '@/lib/supabase/types';
+import type { Contract, Invoice, Plan, Tenant } from '@/lib/supabase/types';
+import type { ErpAdapter, ErpConnection, ErpUsagePoint } from '@/lib/erp/types';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * Garante que o plano do contrato exista no catálogo. Tenta casar pelo id do
+ * ERP; se o provedor nunca sincronizou planos, cria a partir do que o próprio
+ * contrato informa (nome e velocidades) e vincula.
+ */
+async function ensurePlanFromContract(
+  supabase: ReturnType<typeof createAdminClient>,
+  tenant: Tenant,
+  contract: Contract,
+  adapter: ErpAdapter,
+  customerExternalId: string,
+): Promise<Plan | null> {
+  try {
+    const source =
+      (await adapter.listContractsByCustomer(customerExternalId)).find(
+        (c) => c.externalId === contract.external_id,
+      ) ?? null;
+    const externalId = source?.planExternalId ?? null;
+    const name = source?.planName;
+    if (!externalId && !name) return null;
+
+    if (externalId) {
+      const { data: existing } = await supabase
+        .from('plans')
+        .select('*')
+        .eq('tenant_id', tenant.id)
+        .eq('external_id', externalId)
+        .maybeSingle();
+      if (existing) {
+        await supabase.from('contracts').update({ plan_id: (existing as Plan).id } as never).eq('id', contract.id);
+        return existing as Plan;
+      }
+    }
+
+    const { data: created } = await supabase
+      .from('plans')
+      .upsert(
+        {
+          tenant_id: tenant.id,
+          external_id: externalId ?? `contrato-${contract.external_id}`,
+          name: name ?? 'Plano contratado',
+          down_mbps: source?.planDownMbps ?? null,
+          up_mbps: source?.planUpMbps ?? null,
+          price_cents: contract.monthly_price_cents ?? 0,
+          active: true,
+        },
+        { onConflict: 'tenant_id,external_id' },
+      )
+      .select('*')
+      .single();
+
+    if (created) {
+      await supabase.from('contracts').update({ plan_id: (created as Plan).id } as never).eq('id', contract.id);
+      return created as Plan;
+    }
+  } catch (e) {
+    console.error('[portal] plan materialization failed', e);
+  }
+  return null;
+}
 
 export default async function PortalHome() {
   const tenant = await requireTenant();
@@ -58,9 +120,18 @@ export default async function PortalHome() {
 
   const contract: Contract | null = contracts?.[0] ?? null;
 
-  const { data: plan } = contract?.plan_id
-    ? await supabase.from('plans').select('*').eq('id', contract.plan_id).single()
-    : { data: null as Plan | null };
+  // O plano do assinante vem no próprio contrato em vários ERPs (o IXC manda
+  // "MARAUNET-PLANO-500X500 2026"). Se ele ainda não existe no catálogo,
+  // materializamos aqui — senão a central mostraria "sem plano vinculado"
+  // com o plano na cara do cliente lá no sistema do provedor.
+  let plan: Plan | null = null;
+  if (contract?.plan_id) {
+    const { data } = await supabase.from('plans').select('*').eq('id', contract.plan_id).single();
+    plan = (data ?? null) as Plan | null;
+  }
+  if (!plan && contract?.external_id && customer.external_id) {
+    plan = await ensurePlanFromContract(supabase, tenant, contract, adapter, customer.external_id);
+  }
 
   // 2. Faturas — sempre busca do ERP para garantir frescor de status/Pix.
   let openInvoice: Invoice | null = null;
@@ -95,6 +166,8 @@ export default async function PortalHome() {
       console.error('[portal] invoice sync failed', e);
     }
 
+    // A fatura em destaque é a mais antiga ainda não paga: se há atraso, é a
+    // atrasada que precisa aparecer, não a próxima a vencer.
     const { data: openRows } = await supabase
       .from('invoices')
       .select('*')
@@ -113,6 +186,23 @@ export default async function PortalHome() {
     recentInvoices = recent ?? [];
   }
 
+  // Conexão e consumo são ao vivo: nada disso fica no nosso banco, é sempre
+  // o que o ERP responde agora. Falha aqui não pode derrubar a central.
+  let connection: ErpConnection | null = null;
+  let usage: ErpUsagePoint[] = [];
+  if (contract?.external_id) {
+    try {
+      connection = (await adapter.getConnection?.(contract.external_id)) ?? null;
+    } catch (e) {
+      console.error('[portal] connection lookup failed', e);
+    }
+    try {
+      usage = (await adapter.getUsage?.(contract.external_id, 7)) ?? [];
+    } catch (e) {
+      console.error('[portal] usage lookup failed', e);
+    }
+  }
+
   const props = {
     tenant,
     customer,
@@ -120,6 +210,8 @@ export default async function PortalHome() {
     plan: plan as Plan | null,
     openInvoice,
     recentInvoices,
+    connection,
+    usage,
   };
 
   const Home = tenant.layout === 'v2' ? HomeV2 : tenant.layout === 'v3' ? HomeV3 : HomeV1;

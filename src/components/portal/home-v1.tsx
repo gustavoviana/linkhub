@@ -7,11 +7,12 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon } from './icons';
 import { portalTokens } from './tokens';
-import { BrandMark, PortalScreenProps, daysUntil, initials } from './ui';
-import { NetChart } from './net-chart';
+import { BrandMark, PortalScreenProps, initials, invoiceStanding } from './ui';
+import { NetChart, usageToSeries } from './net-chart';
+import { ConnectionCard } from './connection-card';
 
 export function HomeV1(props: PortalScreenProps) {
-  const { tenant, customer, contract, plan, openInvoice, recentInvoices } = props;
+  const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = portalTokens(tenant, tenant.dark_mode_default);
   const firstName = customer.name.split(' ')[0];
 
@@ -61,7 +62,7 @@ export function HomeV1(props: PortalScreenProps) {
                   Próxima fatura
                 </span>
                 <span style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(255,255,255,0.18)', borderRadius: 12, fontWeight: 600 }}>
-                  {dueLabel(openInvoice.due_date)}
+                  {invoiceStanding(openInvoice).label}
                 </span>
               </div>
               <div style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.02em', fontFamily: t.mono, marginTop: 6 }}>
@@ -117,55 +118,14 @@ export function HomeV1(props: PortalScreenProps) {
           <Shortcut t={t} href="/conta" icon="settings" label="Plano" />
         </div>
 
-        {contract && (
-          <div style={{ margin: '0 20px 14px', padding: 18, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  background: t.successSoft,
-                  color: t.success,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Icon name="wifi" size={18} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Sua conexão</div>
-                <div style={{ fontSize: 12, color: t.text2 }}>
-                  {plan ? `${plan.name} · ${plan.down_mbps ?? '—'} / ${plan.up_mbps ?? '—'} Mbps` : 'Contrato ativo'}
-                </div>
-              </div>
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: '4px 10px',
-                  borderRadius: 10,
-                  background: t.successSoft,
-                  color: t.success,
-                  fontWeight: 600,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
-              >
-                <span style={{ width: 6, height: 6, borderRadius: 3, background: t.success }} />
-                {contract.status === 'active' ? 'Online' : contract.status}
-              </span>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <Stat t={t} label="Download" value={plan?.down_mbps ?? null} unit="Mbps" />
-              <Stat t={t} label="Upload" value={plan?.up_mbps ?? null} unit="Mbps" />
-            </div>
+        {(connection || contract) && (
+          <div style={{ margin: '0 20px 14px' }}>
+            <ConnectionCard t={t} connection={connection} contract={contract} plan={plan} />
           </div>
         )}
 
         <div style={{ margin: '0 20px 14px' }}>
-          <NetChart t={t} />
+          <NetChart t={t} series={usageToSeries(usage)} />
         </div>
 
         <div style={{ margin: '8px 20px 0' }}>
@@ -234,12 +194,6 @@ export function HomeV1(props: PortalScreenProps) {
   );
 }
 
-function dueLabel(due: string) {
-  const d = daysUntil(due);
-  if (d < 0) return `${Math.abs(d)} d atrasada`;
-  if (d === 0) return 'vence hoje';
-  return `${d} dias`;
-}
 
 function Shortcut({
   t,

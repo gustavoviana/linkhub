@@ -1,4 +1,4 @@
-import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice } from './types';
+import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConnection, ErpUsagePoint } from './types';
 
 // Adapter de teste — usado pelo tenant 'demo' e quando nenhum ERP foi
 // configurado ainda. Dados determinísticos pelo CPF pra facilitar QA.
@@ -49,6 +49,9 @@ export class MockAdapter implements ErpAdapter {
       externalId: `${customerExternalId}-C1`,
       customerExternalId,
       planExternalId: 'PL-500',
+      planName: 'Fibra 500',
+      planDownMbps: 500,
+      planUpMbps: 250,
       status: 'active',
       pppoeUser: customerExternalId.toLowerCase(),
       dueDay: 10,
@@ -56,6 +59,39 @@ export class MockAdapter implements ErpAdapter {
       installationAddress: 'Rua das Acácias, 1234',
       activatedAt: '2024-03-15T00:00:00Z',
     }];
+  }
+
+  async getConnection(contractExternalId: string): Promise<ErpConnection> {
+    return {
+      online: true,
+      login: contractExternalId.toLowerCase().replace(/-c1$/, ''),
+      ip: '100.64.10.42',
+      mac: 'B4:0F:3B:11:22:33',
+      kind: 'PPPoEoVLAN',
+      concentrator: '172.16.0.1',
+      since: new Date(Date.now() - 26 * 3600_000).toISOString().slice(0, 19),
+      uptimeSeconds: 26 * 3600,
+      downloadBytes: 41_200_000_000,
+      uploadBytes: 3_100_000_000,
+      quotaBytes: 0,
+    };
+  }
+
+  async getUsage(_contractExternalId: string, days = 7): Promise<ErpUsagePoint[]> {
+    const out: ErpUsagePoint[] = [];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const wave = 1 + Math.sin(i * 1.1) * 0.45;
+      out.push({
+        date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        downloadBytes: Math.round(5_600_000_000 * wave),
+        uploadBytes: Math.round(420_000_000 * wave),
+      });
+    }
+    return out;
   }
 
   async listInvoicesByContract(contractExternalId: string, opts?: { onlyOpen?: boolean }): Promise<ErpInvoice[]> {

@@ -8,11 +8,12 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
-import { BrandMark, PortalScreenProps, daysUntil } from './ui';
-import { NetChart } from './net-chart';
+import { BrandMark, PortalScreenProps, invoiceStanding } from './ui';
+import { NetChart, usageToSeries } from './net-chart';
+import { ConnectionCard } from './connection-card';
 
 export function HomeV3(props: PortalScreenProps) {
-  const { tenant, customer, contract, plan, openInvoice, recentInvoices } = props;
+  const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = portalTokens(tenant, tenant.dark_mode_default);
   const firstName = customer.name.split(' ')[0];
 
@@ -99,7 +100,7 @@ export function HomeV3(props: PortalScreenProps) {
                     borderRadius: 20,
                   }}
                 >
-                  {dueBadge(openInvoice.due_date)}
+                  {invoiceStanding(openInvoice).label}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontSize: 13, color: t.text2 }}>
@@ -203,7 +204,7 @@ export function HomeV3(props: PortalScreenProps) {
         )}
 
         <div style={{ margin: '0 18px 16px' }}>
-          <NetChart t={t} />
+          <NetChart t={t} series={usageToSeries(usage)} />
         </div>
 
         <div style={{ padding: '0 18px' }}>
@@ -264,12 +265,6 @@ export function HomeV3(props: PortalScreenProps) {
   );
 }
 
-function dueBadge(due: string) {
-  const d = daysUntil(due);
-  if (d < 0) return `${Math.abs(d)} dias`;
-  if (d === 0) return 'hoje';
-  return `${d} dias`;
-}
 
 function Tile({
   t,

@@ -7,8 +7,9 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
-import { BrandMark, PortalScreenProps, daysUntil } from './ui';
-import { NetChart } from './net-chart';
+import { BrandMark, PortalScreenProps, invoiceStanding } from './ui';
+import { NetChart, usageToSeries } from './net-chart';
+import { ConnectionCard } from './connection-card';
 import { NoOpenInvoice } from './home-v1';
 
 function glass(t: PortalTokens) {
@@ -21,7 +22,7 @@ function glass(t: PortalTokens) {
 }
 
 export function HomeV2(props: PortalScreenProps) {
-  const { tenant, customer, contract, plan, openInvoice, recentInvoices } = props;
+  const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = portalTokens(tenant, tenant.dark_mode_default);
   const firstName = customer.name.split(' ')[0];
 
@@ -87,7 +88,7 @@ export function HomeV2(props: PortalScreenProps) {
                       fontWeight: 600,
                     }}
                   >
-                    {dueBadge(openInvoice.due_date)}
+                    {invoiceStanding(openInvoice).label}
                   </span>
                 </div>
                 <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: '-0.03em', fontFamily: t.mono, marginTop: 10, lineHeight: 1 }}>
@@ -172,7 +173,7 @@ export function HomeV2(props: PortalScreenProps) {
         )}
 
         <div style={{ margin: '0 18px 14px' }}>
-          <NetChart t={t} />
+          <NetChart t={t} series={usageToSeries(usage)} />
         </div>
 
         <div style={{ margin: '0 18px' }}>
@@ -227,12 +228,6 @@ export function HomeV2(props: PortalScreenProps) {
   );
 }
 
-function dueBadge(due: string) {
-  const d = daysUntil(due);
-  if (d < 0) return `${Math.abs(d)}d em atraso`;
-  if (d === 0) return 'vence hoje';
-  return `vence em ${d}d`;
-}
 
 function Quick({ t, href, icon, label }: { t: PortalTokens; href: string; icon: IconName; label: string }) {
   return (

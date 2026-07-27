@@ -3,6 +3,7 @@
 import { NavLink as Link } from './nav-link';
 import { usePathname } from 'next/navigation';
 import type { Tenant, Customer, Contract, Plan, Invoice } from '@/lib/supabase/types';
+import type { ErpConnection, ErpUsagePoint } from '@/lib/erp/types';
 import { Icon, type IconName } from './icons';
 import { type PortalTokens, rgba } from './tokens';
 
@@ -13,6 +14,51 @@ export interface PortalScreenProps {
   plan: Plan | null;
   openInvoice: Invoice | null;
   recentInvoices: Invoice[];
+  connection?: ErpConnection | null;
+  usage?: ErpUsagePoint[];
+}
+
+/** "vencida em 10/07" / "vence em 4 dias" — sempre com a data original. */
+export function invoiceStanding(invoice: Invoice): {
+  overdue: boolean;
+  label: string;
+  days: number;
+} {
+  const days = daysUntil(invoice.due_date);
+  if (invoice.status === 'paid') return { overdue: false, label: 'paga', days };
+  if (days < 0) {
+    return {
+      overdue: true,
+      label: days === -1 ? 'vencida há 1 dia' : `vencida há ${Math.abs(days)} dias`,
+      days,
+    };
+  }
+  if (days === 0) return { overdue: false, label: 'vence hoje', days };
+  if (days === 1) return { overdue: false, label: 'vence amanhã', days };
+  return { overdue: false, label: `vence em ${days} dias`, days };
+}
+
+export function formatBytes(bytes?: number | null): string {
+  if (bytes == null || Number.isNaN(bytes)) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ['KB', 'MB', 'GB', 'TB'];
+  let value = bytes / 1024;
+  let i = 0;
+  while (value >= 1024 && i < units.length - 1) {
+    value /= 1024;
+    i++;
+  }
+  return `${value.toFixed(value >= 100 ? 0 : value >= 10 ? 1 : 2)} ${units[i]}`;
+}
+
+export function formatUptime(seconds?: number | null): string {
+  if (!seconds || seconds < 0) return '—';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}min`;
+  return `${m}min`;
 }
 
 export function initials(name: string) {

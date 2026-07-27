@@ -32,12 +32,46 @@ export interface ErpContract {
   externalId: string;
   customerExternalId: string;
   planExternalId?: string;
+  /** Nome do plano como está no contrato — nem todo ERP tem catálogo à parte. */
+  planName?: string;
+  planDownMbps?: number;
+  planUpMbps?: number;
   status: 'active' | 'suspended' | 'cancelled' | 'pending';
   pppoeUser?: string;
   dueDay?: number;
   monthlyPriceCents?: number;
   installationAddress?: string;
   activatedAt?: string;
+}
+
+/** Estado da conexão do assinante, como o ERP enxerga agora. */
+export interface ErpConnection {
+  online: boolean;
+  login?: string;
+  ip?: string;
+  mac?: string;
+  /** Tipo de autenticação/conexão, ex.: PPPoEoVLAN. */
+  kind?: string;
+  concentrator?: string;
+  /** Início da conexão atual (ISO). */
+  since?: string;
+  /** Segundos conectado na sessão atual. */
+  uptimeSeconds?: number;
+  /** Consumo acumulado da sessão atual, em bytes. */
+  downloadBytes?: number;
+  uploadBytes?: number;
+  /** Franquia contratada em bytes; 0 ou ausente = ilimitado. */
+  quotaBytes?: number;
+  onu?: string;
+  disconnectReason?: string;
+}
+
+/** Um dia de consumo, para o gráfico da central. */
+export interface ErpUsagePoint {
+  /** YYYY-MM-DD */
+  date: string;
+  downloadBytes: number;
+  uploadBytes: number;
 }
 
 export interface ErpInvoice {
@@ -68,6 +102,10 @@ export interface ErpAdapter {
   listContractsByCustomer(customerExternalId: string): Promise<ErpContract[]>;
   listInvoicesByContract(contractExternalId: string, opts?: { onlyOpen?: boolean }): Promise<ErpInvoice[]>;
   getInvoice(invoiceExternalId: string): Promise<ErpInvoice | null>;
+
+  /** Opcionais: nem todo ERP expõe. A central esconde o bloco quando faltam. */
+  getConnection?(contractExternalId: string): Promise<ErpConnection | null>;
+  getUsage?(contractExternalId: string, days?: number): Promise<ErpUsagePoint[]>;
 }
 
 export type ErpConfig = {

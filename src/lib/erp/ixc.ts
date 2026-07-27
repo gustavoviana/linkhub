@@ -1,4 +1,4 @@
-import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig } from './types';
+import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig, ErpConnection, ErpUsagePoint } from './types';
 import { documentVariants } from '@/lib/documento';
 
 // Adapter IXC Soft.
@@ -53,6 +53,36 @@ function normalizeToken(raw: string): string {
   // Veio só a apiKey. Não dá pra adivinhar o usuário; manda como está para o
   // servidor decidir, e a mensagem de erro orienta o provedor.
   return token;
+}
+
+/** O IXC mistura formatos: "2026-12-10" nas faturas, "26/07/2026" no RADIUS. */
+function toIsoDate(value: unknown): string {
+  const v = String(value ?? '').trim();
+  if (!v || v.startsWith('0000')) return '';
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(v);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const iso = /^(\d{4}-\d{2}-\d{2})/.exec(v);
+  return iso ? iso[1]! : '';
+}
+
+function toIsoDateTime(value: unknown): string | undefined {
+  const v = String(value ?? '').trim();
+  if (!v || v.startsWith('0000')) return undefined;
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}:\d{2}:\d{2})/.exec(v);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}T${br[4]}`;
+  const iso = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/.exec(v);
+  if (iso) return `${iso[1]}T${iso[2]}`;
+  return toIsoDate(v) || undefined;
+}
+
+/** "MARAUNET-PLANO-500X500 2026" → 500 / 500. */
+function parseSpeeds(name?: string): { down: number; up: number } | null {
+  if (!name) return null;
+  const m = /(\d{1,5})\s*[xX]\s*(\d{1,5})/.exec(name);
+  if (m) return { down: Number(m[1]), up: Number(m[2]) };
+  const single = /(\d{2,5})\s*(?:MEGA|MB|MBPS)/i.exec(name);
+  if (single) return { down: Number(single[1]), up: Number(single[1]) };
+  return null;
 }
 
 /** Traduz o erro do IXC para algo acionável — e sem HTML cru na tela. */
@@ -178,42 +208,166 @@ export class IxcAdapter implements ErpAdapter {
       qtype: 'cliente_contrato.id_cliente', query: customerExternalId, oper: '=',
       page: '1', rp: '50',
     });
-    return (data.registros ?? []).map((c) => ({
-      externalId: String(c.id),
-      customerExternalId,
-      planExternalId: c.id_vd_contrato ? String(c.id_vd_contrato) : undefined,
-      status: this.mapContractStatus(c.status),
-      pppoeUser: c.login,
-      dueDay: c.dia_vencimento ? Number(c.dia_vencimento) : undefined,
-      monthlyPriceCents: c.mensalidade ? Math.round(Number(c.mensalidade) * 100) : undefined,
-      installationAddress: c.endereco_inst,
-      activatedAt: c.data_ativacao,
-    }));
+
+    // O contrato do IXC não guarda login, mensalidade nem dia de vencimento —
+    // isso vive no radusuarios e nas faturas. O nome do plano vem no campo
+    // `contrato` ("MARAUNET-PLANO-500X500 2026"), que é o que o assinante
+    // reconhece, então é dele que tiramos também as velocidades.
+    return (data.registros ?? []).map((c) => {
+      const planName = c.contrato || undefined;
+      const speeds = parseSpeeds(planName);
+      return {
+        externalId: String(c.id),
+        customerExternalId,
+        planExternalId: c.id_vd_contrato ? String(c.id_vd_contrato) : undefined,
+        planName,
+        planDownMbps: speeds?.down,
+        planUpMbps: speeds?.up,
+        // status_internet reflete bloqueio por falta de pagamento; o status
+        // do contrato sozinho diria "ativo" com a internet cortada.
+        status: this.mapContractStatus(c.status_internet || c.status),
+        installationAddress: [c.endereco, c.numero].filter(Boolean).join(', ') || undefined,
+        activatedAt: toIsoDate(c.data_ativacao),
+      };
+    });
   }
 
   async listInvoicesByContract(contractExternalId: string, opts?: { onlyOpen?: boolean }): Promise<ErpInvoice[]> {
-    const filters: any = {
-      qtype: 'fn.id_contrato', query: contractExternalId, oper: '=',
-      page: '1', rp: '60', sortname: 'fn.data_vencimento', sortorder: 'desc',
+    const filters: Record<string, unknown> = {
+      // O prefixo do qtype precisa ser o nome da tabela. Com "fn." o IXC
+      // devolve erro e a central ficava sem nenhuma fatura.
+      qtype: 'fn_areceber.id_contrato', query: contractExternalId, oper: '=',
+      page: '1', rp: '60',
+      sortname: 'fn_areceber.data_vencimento', sortorder: 'desc',
     };
     if (opts?.onlyOpen) {
-      filters.grid_param = JSON.stringify([{ TB: 'fn.status', OP: '=', P: 'A' }]);
+      filters.grid_param = JSON.stringify([{ TB: 'fn_areceber.status', OP: '=', P: 'A' }]);
     }
     const data = await this.req<IxcListResponse<any>>('fn_areceber', filters);
-    return (data.registros ?? []).map((f) => ({
-      externalId: String(f.id),
-      contractExternalId,
-      dueDate: f.data_vencimento,
-      referenceMonth: f.data_emissao,
-      amountCents: Math.round(Number(f.valor ?? 0) * 100),
-      status: this.mapInvoiceStatus(f.status),
-      pixCopyPaste: f.pix_copia_cola ?? undefined,
-      boletoLine: f.linha_digitavel ?? undefined,
-      boletoPdfUrl: f.url_boleto ?? undefined,
-      nfeUrl: f.url_nfse ?? undefined,
-      paidAt: f.data_pagamento ?? undefined,
-      paidAmountCents: f.valor_recebido ? Math.round(Number(f.valor_recebido) * 100) : undefined,
-    }));
+    return (data.registros ?? []).map((f) => {
+      const due = toIsoDate(f.data_vencimento);
+      const emitted = toIsoDate(f.data_emissao);
+      return {
+        externalId: String(f.id),
+        contractExternalId,
+        dueDate: due,
+        // Mês de referência é o do vencimento: é como o assinante lê a conta.
+        referenceMonth: due ? `${due.slice(0, 7)}-01` : emitted,
+        amountCents: Math.round(Number(f.valor ?? 0) * 100),
+        status: this.mapInvoiceStatus(f.status, due),
+        pixCopyPaste: f.pix_copia_cola || undefined,
+        boletoLine: f.linha_digitavel || undefined,
+        boletoPdfUrl: f.url_boleto || undefined,
+        nfeUrl: f.url_nfse || undefined,
+        paidAt: toIsoDate(f.data_pagamento) || undefined,
+        paidAmountCents: f.valor_recebido ? Math.round(Number(f.valor_recebido) * 100) : undefined,
+      };
+    });
+  }
+
+  /** Conexão atual do assinante — vem do radusuarios, ligado ao contrato. */
+  async getConnection(contractExternalId: string): Promise<ErpConnection | null> {
+    const data = await this.req<IxcListResponse<any>>('radusuarios', {
+      qtype: 'radusuarios.id_contrato', query: contractExternalId, oper: '=',
+      page: '1', rp: '1',
+    });
+    const r = data.registros?.[0];
+    if (!r) return null;
+
+    return {
+      online: r.online === 'S',
+      login: r.login || undefined,
+      ip: r.ip || undefined,
+      mac: r.mac || undefined,
+      kind: r.tipo_conexao || undefined,
+      concentrator: r.concentrador || undefined,
+      since: toIsoDateTime(r.ultima_conexao_inicial),
+      uptimeSeconds: r.tempo_conectado ? Number(r.tempo_conectado) : undefined,
+      downloadBytes: r.download_atual ? Number(r.download_atual) : undefined,
+      uploadBytes: r.upload_atual ? Number(r.upload_atual) : undefined,
+      quotaBytes: r.franquia_maximo ? Number(r.franquia_maximo) : 0,
+      onu: r.onu_mac || undefined,
+      disconnectReason: r.motivo_desconexao || undefined,
+    };
+  }
+
+  /**
+   * Consumo por dia, a partir da contabilidade do RADIUS.
+   *
+   * O RADIUS conta por sessão, não por dia, e uma sessão PPPoE pode durar
+   * semanas. Creditar o total no dia em que a sessão começou produz um pico
+   * absurdo num dia e zero nos outros — e sessão sem registro de encerramento
+   * (queda do concentrador) jogaria tudo em cima de hoje. Por isso o consumo
+   * é distribuído proporcionalmente ao tempo que a sessão passou em cada dia,
+   * e o fim da sessão vem de acctsessiontime quando não há acctstoptime.
+   *
+   * É uma estimativa diária sobre um total exato — a central diz isso ao
+   * cliente em vez de fingir medição por dia.
+   */
+  async getUsage(contractExternalId: string, days = 7): Promise<ErpUsagePoint[]> {
+    const conn = await this.getConnection(contractExternalId);
+    if (!conn?.login) return [];
+
+    const data = await this.req<IxcListResponse<any>>('radacct', {
+      qtype: 'radacct.username', query: conn.login, oper: '=',
+      page: '1', rp: '400',
+      sortname: 'radacct.acctstarttime', sortorder: 'desc',
+    });
+
+    const dayKey = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const buckets = new Map<string, ErpUsagePoint>();
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      buckets.set(dayKey(d), { date: dayKey(d), downloadBytes: 0, uploadBytes: 0 });
+    }
+
+    const windowStart = new Date(today);
+    windowStart.setDate(windowStart.getDate() - (days - 1));
+    const now = Date.now();
+
+    for (const s of data.registros ?? []) {
+      const startIso = toIsoDateTime(s.acctstarttime);
+      if (!startIso) continue;
+      const start = new Date(startIso);
+      if (Number.isNaN(start.getTime())) continue;
+
+      const stopIso = toIsoDateTime(s.acctstoptime);
+      const sessionSeconds = Number(s.acctsessiontime ?? 0);
+      const stop = stopIso
+        ? new Date(stopIso)
+        : new Date(Math.min(now, start.getTime() + sessionSeconds * 1000));
+
+      const spanMs = Math.max(stop.getTime() - start.getTime(), 1);
+      if (stop.getTime() < windowStart.getTime()) continue;
+
+      const down = Number(s.acctoutputoctets ?? 0);
+      const up = Number(s.acctinputoctets ?? 0);
+      if (!down && !up) continue;
+
+      // Fatia a sessão dia a dia e credita a parte proporcional em cada um.
+      for (const [key, bucket] of buckets) {
+        const [y, m, d] = key.split('-').map(Number);
+        const dayStart = new Date(y!, m! - 1, d!).getTime();
+        const dayEnd = dayStart + 86_400_000;
+        const overlap = Math.min(stop.getTime(), dayEnd) - Math.max(start.getTime(), dayStart);
+        if (overlap <= 0) continue;
+        const share = overlap / spanMs;
+        bucket.downloadBytes += down * share;
+        bucket.uploadBytes += up * share;
+      }
+    }
+
+    for (const bucket of buckets.values()) {
+      bucket.downloadBytes = Math.round(bucket.downloadBytes);
+      bucket.uploadBytes = Math.round(bucket.uploadBytes);
+    }
+
+    return [...buckets.values()];
   }
 
   async getInvoice(invoiceExternalId: string): Promise<ErpInvoice | null> {
@@ -244,12 +398,20 @@ export class IxcAdapter implements ErpAdapter {
     }
   }
 
-  private mapInvoiceStatus(s: string): ErpInvoice['status'] {
-    // IXC: A=Aberta, R=Recebida, C=Cancelada
+  private mapInvoiceStatus(s: string, dueDate?: string): ErpInvoice['status'] {
+    // IXC: A=Aberta, R=Recebida, C=Cancelada. O IXC não marca "vencida" —
+    // quem decide é a data, e é essa distinção que a central mostra.
     switch (s) {
       case 'R': return 'paid';
       case 'C': return 'cancelled';
-      default: return 'open';
+      default: {
+        if (!dueDate) return 'open';
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const [y, m, d] = dueDate.split('-').map(Number);
+        const due = new Date(y!, (m ?? 1) - 1, d ?? 1);
+        return due < today ? 'overdue' : 'open';
+      }
     }
   }
 }

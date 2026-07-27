@@ -8,16 +8,34 @@
 // inventar números de tráfego para o cliente final.
 
 import { Icon } from './icons';
+import type { ErpUsagePoint } from '@/lib/erp/types';
 import type { PortalTokens } from './tokens';
 import { rgba } from './tokens';
 
 export interface NetSeries {
-  /** 24 pontos de download, em Mbps. */
+  /** Um ponto por período (dia), em GB. */
   download: number[];
-  /** 24 pontos de upload, em Mbps. */
   upload: number[];
+  /** Rótulo de cada ponto, ex.: "26/07". */
+  labels?: string[];
   totalDownloadGb?: number;
   totalUploadGb?: number;
+}
+
+/** Converte o consumo do ERP (bytes por dia) na série do gráfico. */
+export function usageToSeries(usage?: ErpUsagePoint[] | null): NetSeries | null {
+  if (!usage || usage.length === 0) return null;
+  const gb = (b: number) => b / 1_000_000_000;
+  const download = usage.map((u) => gb(u.downloadBytes));
+  const upload = usage.map((u) => gb(u.uploadBytes));
+  if (download.every((v) => v === 0) && upload.every((v) => v === 0)) return null;
+  return {
+    download,
+    upload,
+    labels: usage.map((u) => `${u.date.slice(8, 10)}/${u.date.slice(5, 7)}`),
+    totalDownloadGb: download.reduce((a, b) => a + b, 0),
+    totalUploadGb: upload.reduce((a, b) => a + b, 0),
+  };
 }
 
 export function NetChart({ t, series }: { t: PortalTokens; series?: NetSeries | null }) {
@@ -79,7 +97,7 @@ function EmptyChart({ t }: { t: PortalTokens }) {
         <div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Consumo de rede</div>
           <div style={{ fontSize: 12, color: t.text2, marginTop: 2 }}>
-            Ainda sem dados — seu provedor não envia consumo por enquanto.
+            Sem registro de consumo nos últimos dias.
           </div>
         </div>
       </div>
@@ -92,13 +110,16 @@ function ChartArea({ t, series }: { t: PortalTokens; series: NetSeries }) {
   const H = 140;
   const max = Math.max(...series.download, ...series.upload, 1);
   const line = (data: number[]) =>
-    'M ' + data.map((v, i) => `${(i / (data.length - 1)) * W},${H - (v / max) * H}`).join(' L ');
+    'M ' + data.map((v, i) => `${(i / Math.max(1, data.length - 1)) * W},${H - (v / max) * H}`).join(' L ');
   const area = (data: number[]) => `${line(data)} L ${W},${H} L 0,${H} Z`;
-  const peak = Math.max(...series.download);
 
   return (
     <Shell t={t}>
-      <Header t={t} title="Consumo de hoje" subtitle={`Pico de ${peak} Mbps`} />
+      <Header
+        t={t}
+        title="Consumo de rede"
+        subtitle={`${(series.totalDownloadGb ?? 0).toFixed(1)} GB nos últimos ${series.download.length} dias`}
+      />
       <svg viewBox={`0 0 ${W} ${H + 30}`} style={{ width: '100%', height: 180 }}>
         <defs>
           <linearGradient id="dl-area" x1="0" x2="0" y1="0" y2="1">
@@ -117,21 +138,24 @@ function ChartArea({ t, series }: { t: PortalTokens; series: NetSeries }) {
         <path d={line(series.download)} stroke={t.accent} strokeWidth="2" fill="none" strokeLinejoin="round" />
         <path d={area(series.upload)} fill="url(#ul-area)" />
         <path d={line(series.upload)} stroke={t.accent2} strokeWidth="2" fill="none" strokeLinejoin="round" />
-        {[0, 6, 12, 18, 23].map((h) => (
-          <text
-            key={h}
-            x={(h / 23) * W}
-            y={H + 18}
-            fontSize="10"
-            fill={t.text3}
-            textAnchor="middle"
-            fontFamily={t.mono}
-          >
-            {String(h).padStart(2, '0')}h
-          </text>
-        ))}
+        {(series.labels ?? []).map((label, i, arr) =>
+          i === 0 || i === arr.length - 1 || i === Math.floor(arr.length / 2) ? (
+            <text
+              key={label}
+              x={(i / Math.max(1, arr.length - 1)) * W}
+              y={H + 18}
+              fontSize="10"
+              fill={t.text3}
+              textAnchor={i === 0 ? 'start' : i === arr.length - 1 ? 'end' : 'middle'}
+              fontFamily={t.mono}
+            >
+              {label}
+            </text>
+          ) : null,
+        )}
       </svg>
       <Legend t={t} series={series} />
+      <UsageFootnote t={t} />
     </Shell>
   );
 }
@@ -142,7 +166,11 @@ function ChartBars({ t, series }: { t: PortalTokens; series: NetSeries }) {
 
   return (
     <Shell t={t}>
-      <Header t={t} title="Consumo por hora" subtitle="Hoje · até agora" />
+      <Header
+        t={t}
+        title="Consumo por dia"
+        subtitle={`${(series.totalDownloadGb ?? 0).toFixed(1)} GB no período`}
+      />
       <div
         style={{
           display: 'flex',
@@ -182,9 +210,11 @@ function ChartBars({ t, series }: { t: PortalTokens; series: NetSeries }) {
         })}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 10, color: t.text3, fontFamily: t.mono }}>
-        <span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>23h</span>
+        <span>{series.labels?.[0]}</span>
+        <span>{series.labels?.[series.labels.length - 1]}</span>
       </div>
       <Legend t={t} series={series} />
+      <UsageFootnote t={t} />
     </Shell>
   );
 }
@@ -268,6 +298,15 @@ function Legend({ t, series }: { t: PortalTokens; series: NetSeries }) {
           <span style={{ fontWeight: 700, fontFamily: t.mono }}>{series.totalUploadGb.toFixed(2)} GB</span>
         )}
       </div>
+    </div>
+  );
+}
+
+/** O total é exato; a divisão por dia é estimada. A central diz isso. */
+export function UsageFootnote({ t }: { t: PortalTokens }) {
+  return (
+    <div style={{ fontSize: 10, color: t.text3, marginTop: 8, lineHeight: 1.4 }}>
+      Distribuição diária estimada a partir das sessões de conexão.
     </div>
   );
 }
