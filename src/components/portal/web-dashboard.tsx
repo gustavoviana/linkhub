@@ -140,7 +140,9 @@ export function WebDashboard(props: PortalScreenProps) {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 14, marginBottom: 18 }}>
-        <NetChart t={t} series={usageToSeries(usage)} />
+        {/* No desktop o card divide a linha com o de pagamento e estica até a
+            altura dele — o gráfico acompanha, senão sobra vazio embaixo. */}
+        <NetChart t={t} series={usageToSeries(usage)} height={260} fill />
 
         <div style={{ padding: 22, background: t.surfaceSolid, borderRadius: 14, border: `1px solid ${t.border}` }}>
           <div style={{ fontSize: 13, fontWeight: 700 }}>

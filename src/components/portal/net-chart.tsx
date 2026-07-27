@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 // Gráfico de consumo de rede — portado de docs/prototipo/src/charts.jsx.
 // Três variações (área, barras, anel), uma por layout do portal.
@@ -40,16 +40,111 @@ export function usageToSeries(usage?: ErpUsagePoint[] | null): NetSeries | null 
   };
 }
 
-export function NetChart({ t, series }: { t: PortalTokens; series?: NetSeries | null }) {
+export function NetChart({
+  t,
+  series,
+  height = 200,
+  fill = false,
+}: {
+  t: PortalTokens;
+  series?: NetSeries | null;
+  /** Altura mínima da área de plotagem. O desktop pede um gráfico mais alto. */
+  height?: number;
+  /** Estica o gráfico até a altura do card — usado no painel web. */
+  fill?: boolean;
+}) {
   if (!series || series.download.length === 0) {
     return <EmptyChart t={t} />;
   }
-  if (t.layout === 'v2') return <ChartBars t={t} series={series} />;
+  if (t.layout === 'v2') return <ChartBars t={t} series={series} height={height} fill={fill} />;
   if (t.layout === 'v3') return <ChartRadial t={t} series={series} />;
-  return <ChartArea t={t} series={series} />;
+  return <ChartArea t={t} series={series} height={height} fill={fill} />;
 }
 
-function Shell({ t, children }: { t: PortalTokens; children: React.ReactNode }) {
+/**
+ * Tamanho real da caixa do gráfico. O desenho é feito em pixels, não escalado
+ * pelo viewBox: escalar deformava o traço e, quando a proporção do viewBox não
+ * batia com a do card, sobrava faixa vazia dos dois lados no desktop.
+ */
+function useChartBox() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      // Só reage a mudança real: escrever o mesmo tamanho realimentaria o
+      // observer e o gráfico ficaria redesenhando sozinho.
+      setBox((prev) =>
+        Math.abs(prev.width - rect.width) < 0.5 && Math.abs(prev.height - rect.height) < 0.5
+          ? prev
+          : { width: rect.width, height: rect.height },
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return { ref, ...box };
+}
+
+/**
+ * Escala do eixo y: teto redondo com folga acima do pico (era isso que
+ * faltava — com o teto colado no pico a crista da onda saía cortada) e um
+ * número de divisões que caia em valores redondos, não em 13/25/38.
+ */
+function axisScale(peak: number) {
+  const max = niceCeil(peak * 1.12);
+  const divisions = [4, 5].find((n) => isRoundStep(max / n)) ?? 4;
+  return { max, divisions };
+}
+
+function niceCeil(value: number) {
+  if (!(value > 0)) return 1;
+  const base = Math.pow(10, Math.floor(Math.log10(value)));
+  const step = [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find((s) => value / base <= s) ?? 10;
+  return step * base;
+}
+
+function isRoundStep(step: number) {
+  const mantissa = step / Math.pow(10, Math.floor(Math.log10(step)));
+  return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8].some((v) => Math.abs(v - mantissa) < 1e-6);
+}
+
+/** Rótulo do eixo sem zeros à toa: 10, 12.5, 0.3. */
+function axisLabel(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
+}
+
+/** Um ponto só não desenha área; repete para virar um segmento reto. */
+function expand<T>(values: T[]): T[] {
+  return values.length > 1 ? values : [values[0], values[0]];
+}
+
+/** Quais dias cabem no eixo x sem os rótulos se encavalarem. */
+function labelIndexes(n: number, plotWidth: number) {
+  const fits = Math.max(2, Math.floor(plotWidth / 52));
+  const step = Math.max(1, Math.ceil((n - 1) / (fits - 1)));
+  const out: number[] = [];
+  for (let i = 0; i < n; i += step) out.push(i);
+  const last = out[out.length - 1];
+  if (last !== n - 1) {
+    if (n - 1 - last < step * 0.6) out[out.length - 1] = n - 1;
+    else out.push(n - 1);
+  }
+  return out;
+}
+
+const round = (v: number) => Math.round(v * 10) / 10;
+
+/** Respiro em volta da plotagem: rótulos do eixo y à esquerda, dias embaixo. */
+const PAD = { top: 16, right: 12, bottom: 30, left: 40 };
+
+function Shell({ t, children, fill }: { t: PortalTokens; children: React.ReactNode; fill?: boolean }) {
   return (
     <div
       style={{
@@ -58,6 +153,7 @@ function Shell({ t, children }: { t: PortalTokens; children: React.ReactNode }) 
         borderRadius: t.radius,
         border: `1px solid ${t.border}`,
         color: t.text,
+        ...(fill ? { height: '100%', display: 'flex', flexDirection: 'column' } : null),
       }}
     >
       {children}
@@ -107,76 +203,189 @@ function EmptyChart({ t }: { t: PortalTokens }) {
   );
 }
 
-function ChartArea({ t, series }: { t: PortalTokens; series: NetSeries }) {
-  const W = 300;
-  const H = 140;
+function ChartArea({
+  t,
+  series,
+  height,
+  fill,
+}: {
+  t: PortalTokens;
+  series: NetSeries;
+  height: number;
+  fill?: boolean;
+}) {
   // A home renderiza a versão mobile e a web ao mesmo tempo (uma escondida
   // por CSS). Com id fixo, os dois gráficos disputavam o mesmo gradiente e um
   // deles saía sem preenchimento.
   const uid = useId().replace(/:/g, '');
-  const max = Math.max(...series.download, ...series.upload, 1);
+  const { ref, width, height: boxHeight } = useChartBox();
+
+  const download = expand(series.download);
+  const upload = expand(series.upload);
+  const labels =
+    series.labels && series.labels.length === series.download.length ? expand(series.labels) : null;
+
+  // Antes da primeira medição (render do servidor, ou card ainda escondido
+  // pelo media query) desenhamos numa largura plausível; o ResizeObserver
+  // ajusta assim que o card ganha caixa.
+  const W = Math.max(Math.round(width) || 560, 220);
+  // Com `fill`, a caixa recebe a altura do card pelo flex e o desenho segue
+  // ela; sem `fill`, a altura é a do prop e a caixa apenas acompanha.
+  const H = fill ? Math.max(Math.round(boxHeight) || height, height) : height;
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+  const baseline = PAD.top + plotH;
+
+  const { max, divisions } = axisScale(Math.max(...download, ...upload, 0));
+  const n = download.length;
+  const x = (i: number) => PAD.left + (i / (n - 1)) * plotW;
+  const y = (v: number) => baseline - (v / max) * plotH;
   const line = (data: number[]) =>
-    'M ' + data.map((v, i) => `${(i / Math.max(1, data.length - 1)) * W},${H - (v / max) * H}`).join(' L ');
-  const area = (data: number[]) => `${line(data)} L ${W},${H} L 0,${H} Z`;
+    'M ' + data.map((v, i) => `${round(x(i))},${round(y(v))}`).join(' L ');
+  const area = (data: number[]) =>
+    `${line(data)} L ${round(x(n - 1))},${baseline} L ${round(x(0))},${baseline} Z`;
+
+  const peakIndex = download.indexOf(Math.max(...download));
+  const ticks = Array.from({ length: divisions + 1 }, (_, i) => (max * i) / divisions);
 
   return (
-    <Shell t={t}>
+    <Shell t={t} fill={fill}>
       <Header
         t={t}
         title="Consumo de rede"
         subtitle={`${(series.totalDownloadGb ?? 0).toFixed(1)} GB nos últimos ${series.download.length} dias`}
       />
-      {/* Altura acompanha a largura pelo viewBox: em qualquer tela o gráfico
-          escala inteiro, sem cortar nem sobrar faixa vazia. */}
-      <svg
-        viewBox={`0 0 ${W} ${H + 30}`}
-        style={{ width: '100%', height: 'auto', display: 'block', maxHeight: 220 }}
+      <div
+        ref={ref}
+        style={{
+          width: '100%',
+          ...(fill ? { flex: '1 1 auto', minHeight: height, overflow: 'hidden' } : null),
+        }}
       >
-        <defs>
-          <linearGradient id={`dl-${uid}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={t.accent} stopOpacity="0.45" />
-            <stop offset="100%" stopColor={t.accent} stopOpacity="0" />
-          </linearGradient>
-          <linearGradient id={`ul-${uid}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={t.accent2} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={t.accent2} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map((pct) => (
-          <line key={pct} x1="0" y1={H * pct} x2={W} y2={H * pct} stroke={t.borderSoft} strokeWidth="1" />
-        ))}
-        <path d={area(series.download)} fill={`url(#dl-${uid})`} />
-        <path d={line(series.download)} stroke={t.accent} strokeWidth="2" fill="none" strokeLinejoin="round" />
-        <path d={area(series.upload)} fill={`url(#ul-${uid})`} />
-        <path d={line(series.upload)} stroke={t.accent2} strokeWidth="2" fill="none" strokeLinejoin="round" />
-        {(series.labels ?? []).map((label, i, arr) =>
-          i === 0 || i === arr.length - 1 || i === Math.floor(arr.length / 2) ? (
-            <text
-              key={label}
-              x={(i / Math.max(1, arr.length - 1)) * W}
-              y={H + 18}
-              fontSize="10"
-              fill={t.text3}
-              textAnchor={i === 0 ? 'start' : i === arr.length - 1 ? 'end' : 'middle'}
-              fontFamily={t.mono}
-            >
-              {label}
-            </text>
-          ) : null,
-        )}
-      </svg>
+        <svg
+          width={W}
+          height={H}
+          viewBox={`0 0 ${W} ${H}`}
+          style={{ display: 'block', maxWidth: '100%' }}
+          role="img"
+          aria-label={`Consumo de rede: ${(series.totalDownloadGb ?? 0).toFixed(1)} GB de download e ${(series.totalUploadGb ?? 0).toFixed(1)} GB de upload nos últimos ${series.download.length} dias`}
+        >
+          <defs>
+            <linearGradient id={`dl-${uid}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={t.accent} stopOpacity="0.45" />
+              <stop offset="100%" stopColor={t.accent} stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id={`ul-${uid}`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor={t.accent2} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={t.accent2} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {ticks.map((value) => (
+            <g key={value}>
+              <line
+                x1={PAD.left}
+                y1={round(y(value))}
+                x2={W - PAD.right}
+                y2={round(y(value))}
+                stroke={t.borderSoft}
+                strokeWidth="1"
+              />
+              <text
+                x={PAD.left - 8}
+                y={round(y(value)) + 3}
+                fontSize="9"
+                fill={t.text3}
+                textAnchor="end"
+                fontFamily={t.mono}
+              >
+                {axisLabel(value)}
+              </text>
+            </g>
+          ))}
+
+          <path d={area(download)} fill={`url(#dl-${uid})`} />
+          <path
+            d={line(download)}
+            stroke={t.accent}
+            strokeWidth="2.5"
+            fill="none"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          <path d={area(upload)} fill={`url(#ul-${uid})`} />
+          <path
+            d={line(upload)}
+            stroke={t.accent2}
+            strokeWidth="2"
+            fill="none"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+
+          <line
+            x1={round(x(peakIndex))}
+            y1={round(y(download[peakIndex]))}
+            x2={round(x(peakIndex))}
+            y2={baseline}
+            stroke={t.text3}
+            strokeDasharray="3 3"
+            strokeWidth="1"
+            opacity="0.45"
+          />
+          {n <= 14 &&
+            download.map((v, i) => (
+              <circle
+                key={i}
+                cx={round(x(i))}
+                cy={round(y(v))}
+                r={i === peakIndex ? 4.5 : 3}
+                fill={t.accent}
+                stroke={t.surfaceSolid}
+                strokeWidth="2"
+              />
+            ))}
+
+          {labels &&
+            labelIndexes(n, plotW).map((i) => (
+              <text
+                key={i}
+                x={round(x(i))}
+                y={H - 10}
+                fontSize="10"
+                fill={t.text3}
+                textAnchor={i === n - 1 ? 'end' : i === 0 ? 'start' : 'middle'}
+                fontFamily={t.mono}
+              >
+                {labels[i]}
+              </text>
+            ))}
+        </svg>
+      </div>
       <Legend t={t} series={series} />
       <UsageFootnote t={t} />
     </Shell>
   );
 }
 
-function ChartBars({ t, series }: { t: PortalTokens; series: NetSeries }) {
+function ChartBars({
+  t,
+  series,
+  height,
+  fill,
+}: {
+  t: PortalTokens;
+  series: NetSeries;
+  height: number;
+  fill?: boolean;
+}) {
   const max = Math.max(...series.download, 1);
   const peakIndex = series.download.indexOf(max);
+  // Reserva o rodapé para os rótulos de data, como no gráfico de área.
+  const barsHeight = Math.max(120, height - 46);
 
   return (
-    <Shell t={t}>
+    <Shell t={t} fill={fill}>
       <Header
         t={t}
         title="Consumo por dia"
@@ -187,9 +396,10 @@ function ChartBars({ t, series }: { t: PortalTokens; series: NetSeries }) {
           display: 'flex',
           alignItems: 'flex-end',
           gap: 3,
-          height: 140,
+          height: barsHeight,
           paddingBottom: 4,
           borderBottom: `1px solid ${t.borderSoft}`,
+          ...(fill ? { flex: '1 1 auto', minHeight: barsHeight, height: 'auto' } : null),
         }}
       >
         {series.download.map((dl, i) => {
