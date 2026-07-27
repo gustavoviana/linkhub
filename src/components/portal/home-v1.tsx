@@ -4,7 +4,7 @@
 // hierarquia tipográfica, muito respiro, cards de borda fina sem sombra.
 
 import { NavLink as Link } from './nav-link';
-import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
+import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon } from './icons';
 import { portalTokens } from './tokens';
 import { BrandMark, PortalScreenProps, initials, invoiceStanding } from './ui';
@@ -14,7 +14,7 @@ import { ConnectionCard } from './connection-card';
 export function HomeV1(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = portalTokens(tenant, tenant.dark_mode_default);
-  const firstName = customer.name.split(' ')[0];
+  const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
     <div style={{ background: t.bg, color: t.text, minHeight: '100%', paddingBottom: 110 }}>

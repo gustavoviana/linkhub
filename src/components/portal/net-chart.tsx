@@ -1,5 +1,7 @@
 'use client';
 
+import { useId } from 'react';
+
 // Gráfico de consumo de rede — portado de docs/prototipo/src/charts.jsx.
 // Três variações (área, barras, anel), uma por layout do portal.
 //
@@ -108,6 +110,10 @@ function EmptyChart({ t }: { t: PortalTokens }) {
 function ChartArea({ t, series }: { t: PortalTokens; series: NetSeries }) {
   const W = 300;
   const H = 140;
+  // A home renderiza a versão mobile e a web ao mesmo tempo (uma escondida
+  // por CSS). Com id fixo, os dois gráficos disputavam o mesmo gradiente e um
+  // deles saía sem preenchimento.
+  const uid = useId().replace(/:/g, '');
   const max = Math.max(...series.download, ...series.upload, 1);
   const line = (data: number[]) =>
     'M ' + data.map((v, i) => `${(i / Math.max(1, data.length - 1)) * W},${H - (v / max) * H}`).join(' L ');
@@ -120,13 +126,18 @@ function ChartArea({ t, series }: { t: PortalTokens; series: NetSeries }) {
         title="Consumo de rede"
         subtitle={`${(series.totalDownloadGb ?? 0).toFixed(1)} GB nos últimos ${series.download.length} dias`}
       />
-      <svg viewBox={`0 0 ${W} ${H + 30}`} style={{ width: '100%', height: 180 }}>
+      {/* Altura acompanha a largura pelo viewBox: em qualquer tela o gráfico
+          escala inteiro, sem cortar nem sobrar faixa vazia. */}
+      <svg
+        viewBox={`0 0 ${W} ${H + 30}`}
+        style={{ width: '100%', height: 'auto', display: 'block', maxHeight: 220 }}
+      >
         <defs>
-          <linearGradient id="dl-area" x1="0" x2="0" y1="0" y2="1">
+          <linearGradient id={`dl-${uid}`} x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor={t.accent} stopOpacity="0.45" />
             <stop offset="100%" stopColor={t.accent} stopOpacity="0" />
           </linearGradient>
-          <linearGradient id="ul-area" x1="0" x2="0" y1="0" y2="1">
+          <linearGradient id={`ul-${uid}`} x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor={t.accent2} stopOpacity="0.35" />
             <stop offset="100%" stopColor={t.accent2} stopOpacity="0" />
           </linearGradient>
@@ -134,9 +145,9 @@ function ChartArea({ t, series }: { t: PortalTokens; series: NetSeries }) {
         {[0.25, 0.5, 0.75].map((pct) => (
           <line key={pct} x1="0" y1={H * pct} x2={W} y2={H * pct} stroke={t.borderSoft} strokeWidth="1" />
         ))}
-        <path d={area(series.download)} fill="url(#dl-area)" />
+        <path d={area(series.download)} fill={`url(#dl-${uid})`} />
         <path d={line(series.download)} stroke={t.accent} strokeWidth="2" fill="none" strokeLinejoin="round" />
-        <path d={area(series.upload)} fill="url(#ul-area)" />
+        <path d={area(series.upload)} fill={`url(#ul-${uid})`} />
         <path d={line(series.upload)} stroke={t.accent2} strokeWidth="2" fill="none" strokeLinejoin="round" />
         {(series.labels ?? []).map((label, i, arr) =>
           i === 0 || i === arr.length - 1 || i === Math.floor(arr.length / 2) ? (
@@ -220,6 +231,7 @@ function ChartBars({ t, series }: { t: PortalTokens; series: NetSeries }) {
 }
 
 function ChartRadial({ t, series }: { t: PortalTokens; series: NetSeries }) {
+  const uid = useId().replace(/:/g, '');
   const used = series.totalDownloadGb ?? 0;
   const limit = Math.max(used * 1.6, 1);
   const pct = used / limit;
@@ -231,9 +243,12 @@ function ChartRadial({ t, series }: { t: PortalTokens; series: NetSeries }) {
     <Shell t={t}>
       <Header t={t} title="Consumo do dia" subtitle="Plano ilimitado" />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginTop: 8 }}>
-        <svg width="180" height="180" viewBox="-90 -90 180 180" style={{ transform: 'rotate(-90deg)' }}>
+        <svg
+          viewBox="-90 -90 180 180"
+          style={{ width: '100%', maxWidth: 180, height: 'auto', transform: 'rotate(-90deg)' }}
+        >
           <defs>
-            <linearGradient id="rad-grad" x1="0" x2="1" y1="0" y2="1">
+            <linearGradient id={`rad-${uid}`} x1="0" x2="1" y1="0" y2="1">
               <stop offset="0%" stopColor={t.accent} />
               <stop offset="100%" stopColor={t.accent2} />
             </linearGradient>
@@ -242,7 +257,7 @@ function ChartRadial({ t, series }: { t: PortalTokens; series: NetSeries }) {
           <circle
             r={r}
             fill="none"
-            stroke="url(#rad-grad)"
+            stroke={`url(#rad-${uid})`}
             strokeWidth="14"
             strokeLinecap="round"
             strokeDasharray={C}

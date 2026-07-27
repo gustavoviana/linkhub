@@ -77,6 +77,29 @@ export function maskPhone(value: string | null | undefined): string {
   return value;
 }
 
+// Os ERPs guardam nome em caixa alta ("ERICSON FERNANDO MACHADO"). Gritar com
+// o assinante na tela dele não combina com nada; normalizamos na exibição e
+// deixamos o dado original intacto no banco.
+const NAME_PARTICLES = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'di', 'du', 'del', 'della', 'van', 'von']);
+
+export function titleCaseName(value: string | null | undefined): string {
+  const raw = (value ?? '').trim();
+  if (!raw) return '';
+  // Nome já escrito com maiúsculas e minúsculas fica como está — pode ser uma
+  // grafia intencional ("McDonald", "D'Ávila").
+  if (raw !== raw.toUpperCase() && raw !== raw.toLowerCase()) return raw;
+
+  return raw
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word, i) => {
+      if (i > 0 && NAME_PARTICLES.has(word)) return word;
+      // Trata hífen e apóstrofo: "maria-clara" e "d'ávila".
+      return word.replace(/(^|[-'])([\p{L}])/gu, (_, sep, letter) => sep + letter.toUpperCase());
+    })
+    .join(' ');
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

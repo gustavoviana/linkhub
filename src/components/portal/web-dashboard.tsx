@@ -5,7 +5,7 @@
 // pagamento no meio, cartões de conexão, atendimento e plano embaixo.
 
 import { NavLink as Link } from './nav-link';
-import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
+import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
 import { NetChart, usageToSeries } from './net-chart';
@@ -15,7 +15,7 @@ import { PortalScreenProps, invoiceStanding } from './ui';
 export function WebDashboard(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = portalTokens(tenant, tenant.dark_mode_default);
-  const firstName = customer.name.split(' ')[0];
+  const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   const kpis: {
     label: string;
@@ -267,8 +267,13 @@ export function WebDashboard(props: PortalScreenProps) {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
             {tenant.support_whatsapp && (
-              <a href={`https://wa.me/${tenant.support_whatsapp}`} target="_blank" rel="noreferrer" style={channelBtn(t)}>
-                <Icon name="chat" size={14} /> WhatsApp
+              <a
+                href={`https://wa.me/${tenant.support_whatsapp}`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ ...channelBtn(t), background: '#25D366', color: '#fff', border: 'none' }}
+              >
+                <Icon name="whatsapp" size={15} /> WhatsApp
               </a>
             )}
             {tenant.support_phone && (

@@ -186,13 +186,28 @@ export default async function PortalHome() {
       .limit(1);
     openInvoice = openRows?.[0] ?? null;
 
-    const { data: recent } = await supabase
+    // Histórico: as próximas a vencer primeiro (setembro, outubro…), depois
+    // as pagas mais recentes. A fatura em destaque não se repete na lista.
+    const { data: upcoming } = await supabase
       .from('invoices')
       .select('*')
       .eq('contract_id', contract.id)
+      .in('status', ['open', 'overdue', 'partial'])
+      .order('due_date', { ascending: true })
+      .limit(6);
+
+    const { data: settled } = await supabase
+      .from('invoices')
+      .select('*')
+      .eq('contract_id', contract.id)
+      .eq('status', 'paid')
       .order('due_date', { ascending: false })
-      .limit(5);
-    recentInvoices = recent ?? [];
+      .limit(3);
+
+    recentInvoices = [
+      ...(upcoming ?? []).filter((i) => i.id !== openInvoice?.id),
+      ...(settled ?? []),
+    ].slice(0, 5);
   }
 
   // Conexão e consumo são ao vivo: nada disso fica no nosso banco, é sempre

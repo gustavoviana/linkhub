@@ -4,7 +4,7 @@
 // gradiente da marca, densidade maior e hierarquia por contraste.
 
 import { NavLink as Link } from './nav-link';
-import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
+import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
 import { BrandMark, PortalScreenProps, invoiceStanding } from './ui';
@@ -24,7 +24,7 @@ function glass(t: PortalTokens) {
 export function HomeV2(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = portalTokens(tenant, tenant.dark_mode_default);
-  const firstName = customer.name.split(' ')[0];
+  const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
     <div style={{ background: t.bgGrad, color: t.text, minHeight: '100%', paddingBottom: 120 }}>

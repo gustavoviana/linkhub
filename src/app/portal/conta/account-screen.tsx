@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { Tenant, Customer, Contract, Plan } from '@/lib/supabase/types';
-import { formatBRL, maskCpfCnpj, maskPhone } from '@/lib/utils';
+import { formatBRL, maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, type PortalTokens } from '@/components/portal/tokens';
 import { ScreenHeader } from '@/components/portal/shell';
@@ -50,7 +50,7 @@ export function AccountScreen({
           {initials(customer.name)}
         </div>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{customer.name}</div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{titleCaseName(customer.name)}</div>
           <div style={{ fontSize: 13, color: t.text2, fontFamily: t.mono }}>
             {maskCpfCnpj(customer.cpf_cnpj)}
           </div>
@@ -74,7 +74,7 @@ export function AccountScreen({
 
       <Card t={t}>
         <CardTitle t={t} icon="user">Dados pessoais</CardTitle>
-        <Line t={t} label="Nome" value={customer.name} />
+        <Line t={t} label="Nome" value={titleCaseName(customer.name)} />
         <Line t={t} label="CPF" value={maskCpfCnpj(customer.cpf_cnpj)} />
         {customer.email && <Line t={t} label="E-mail" value={customer.email} />}
         {customer.phone && <Line t={t} label="Telefone" value={maskPhone(customer.phone)} />}

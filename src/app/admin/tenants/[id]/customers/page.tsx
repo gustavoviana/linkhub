@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { asCustomers } from '@/lib/supabase/helpers';
 import { requireTenantAdmin } from '@/lib/auth/session';
 import { Card, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
-import { maskCpfCnpj, maskPhone } from '@/lib/utils';
+import { maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ResetPasswordButton } from './reset-password-button';
 
@@ -53,7 +53,7 @@ export default async function CustomersPage({ params }: { params: Promise<{ id: 
               <tbody>
                 {customers.map((c) => (
                   <tr key={c.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3 font-medium">{c.name}</td>
+                    <td className="px-4 py-3 font-medium">{titleCaseName(c.name)}</td>
                     <td className="px-4 py-3 font-mono text-xs">{maskCpfCnpj(c.cpf_cnpj)}</td>
                     <td className="px-4 py-3 text-xs">
                       {c.email && <div>{c.email}</div>}
@@ -73,7 +73,7 @@ export default async function CustomersPage({ params }: { params: Promise<{ id: 
                       <ResetPasswordButton
                         tenantId={id}
                         customerId={c.id}
-                        customerName={c.name}
+                        customerName={titleCaseName(c.name)}
                         linked={!!c.user_id}
                       />
                     </td>

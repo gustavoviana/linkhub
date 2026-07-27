@@ -159,7 +159,14 @@ export function SupportScreen({ tenant, tickets }: { tenant: Tenant; tickets: Su
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {tenant.support_whatsapp && (
-            <Channel t={t} icon="chat" label="WhatsApp" value={tenant.support_whatsapp} href={`https://wa.me/${tenant.support_whatsapp}`} highlight />
+            <Channel
+              t={t}
+              icon="whatsapp"
+              label="WhatsApp"
+              value={tenant.support_whatsapp}
+              href={`https://wa.me/${tenant.support_whatsapp}`}
+              brandColor="#25D366"
+            />
           )}
           {tenant.support_phone && (
             <Channel t={t} icon="phone" label="Telefone" value={tenant.support_phone} href={`tel:${tenant.support_phone.replace(/\D/g, '')}`} />
@@ -362,6 +369,7 @@ function Channel({
   value,
   href,
   highlight,
+  brandColor,
 }: {
   t: PortalTokens;
   icon: IconName;
@@ -369,7 +377,10 @@ function Channel({
   value: string;
   href: string;
   highlight?: boolean;
+  /** Cor da marca do canal — o verde do WhatsApp é o que o cliente procura. */
+  brandColor?: string;
 }) {
+  const filled = brandColor ?? (highlight ? undefined : null);
   return (
     <a
       href={href}
@@ -381,10 +392,11 @@ function Channel({
         gap: 12,
         padding: 14,
         borderRadius: t.radiusSm,
-        background: highlight ? t.accentGrad : t.surface,
-        color: highlight ? t.accentFg : t.text,
-        border: highlight ? 'none' : `1px solid ${t.border}`,
+        background: brandColor ?? (highlight ? t.accentGrad : t.surface),
+        color: filled ? '#fff' : highlight ? t.accentFg : t.text,
+        border: brandColor || highlight ? 'none' : `1px solid ${t.border}`,
         fontWeight: 600,
+        boxShadow: brandColor ? `0 8px 20px -8px ${brandColor}` : undefined,
       }}
     >
       <Icon name={icon} size={18} />

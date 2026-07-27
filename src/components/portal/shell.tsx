@@ -7,7 +7,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import type { Tenant, Customer } from '@/lib/supabase/types';
-import { maskCpfCnpj } from '@/lib/utils';
+import { maskCpfCnpj, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, type PortalTokens } from './tokens';
 import { BrandMark, TabBar, initials } from './ui';
@@ -105,7 +105,7 @@ export function PortalSidebar({
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {customer.name}
+              {titleCaseName(customer.name)}
             </div>
             <div style={{ fontSize: 10, color: t.text3, fontFamily: t.mono }}>
               {maskCpfCnpj(customer.cpf_cnpj)}
