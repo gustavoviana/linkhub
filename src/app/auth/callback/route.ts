@@ -8,7 +8,12 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    // Link expirado ou já usado: manda para o pedido de novo link em vez de
+    // despejar o usuário no painel sem sessão.
+    if (error) {
+      return NextResponse.redirect(`${origin}/esqueci-senha?expirado=1`);
+    }
   }
   return NextResponse.redirect(`${origin}${next}`);
 }

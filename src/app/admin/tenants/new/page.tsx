@@ -30,12 +30,17 @@ export default function NewTenantPage() {
       p_legal_name: legalName || null,
       p_cnpj: cnpj || null,
     } as never);
-    setLoading(false);
     if (error) {
+      setLoading(false);
       setError(error.message);
       return;
     }
-    router.push(`/admin/tenants/${(data as any).id}`);
+
+    const tenantId = (data as any).id;
+    await fetch(`/api/tenants/${tenantId}/domain`, { method: 'POST' }).catch(() => null);
+
+    setLoading(false);
+    router.push(`/admin/tenants/${tenantId}`);
     router.refresh();
   }
 

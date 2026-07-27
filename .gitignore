@@ -17,3 +17,9 @@ dist/
 # Supabase
 supabase/.branches
 supabase/.temp
+
+.vercel
+.env*.local
+
+# artefato de build do TypeScript
+tsconfig.tsbuildinfo

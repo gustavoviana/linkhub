@@ -2,12 +2,12 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { Tenant, ErpType } from '@/lib/supabase/types';
+import type { MaskedErpConfig } from '@/lib/erp/crypto';
 import { cn } from '@/lib/utils';
 
 const ERPS: { id: ErpType; name: string; desc: string }[] = [
@@ -18,10 +18,15 @@ const ERPS: { id: ErpType; name: string; desc: string }[] = [
   { id: 'mock', name: 'Dados de teste', desc: 'Use enquanto integra. Mostra dados fictícios.' },
 ];
 
-export default function ErpForm({ tenant }: { tenant: Tenant }) {
+export default function ErpForm({ tenant, masked }: { tenant: Tenant; masked: MaskedErpConfig }) {
   const router = useRouter();
   const [type, setType] = useState<ErpType>(tenant.erp_type);
-  const [cfg, setCfg] = useState<any>(tenant.erp_config ?? {});
+  const [cfg, setCfg] = useState<any>(masked.config ?? {});
+  // Segredo já salvo aparece como campo vazio com aviso; só é reenviado se o
+  // admin digitar algo novo.
+  const savedSecret = (field: string) => !!masked.saved?.[type]?.[field] && !cfg?.[type]?.[field];
+  const secretHint = (field: string) =>
+    savedSecret(field) ? 'Salvo. Deixe em branco para manter, ou digite um novo.' : undefined;
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,11 +41,15 @@ export default function ErpForm({ tenant }: { tenant: Tenant }) {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const supabase = createClient();
-    const update: Record<string, unknown> = { erp_type: type, erp_config: cfg };
-    const { error } = await (supabase.from('tenants').update(update as never)).eq('id', tenant.id);
+    // Credencial de ERP não é gravada pelo browser — vai pelo servidor, que
+    // valida papel e formato antes de escrever.
+    const r = await fetch(`/api/tenants/${tenant.id}/erp`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ erp_type: type, erp_config: cfg }),
+    });
     setSaving(false);
-    if (error) { setError(error.message); return; }
+    if (!r.ok) { setError(await r.text()); return; }
     setSaved(true);
     router.refresh();
     setTimeout(() => setSaved(false), 2500);
@@ -96,7 +105,10 @@ export default function ErpForm({ tenant }: { tenant: Tenant }) {
         <Card>
           <CardHeader>
             <CardTitle>Credenciais</CardTitle>
-            <CardSubtitle>Configure a integração. Os dados ficam criptografados no servidor.</CardSubtitle>
+            <CardSubtitle>
+              Configure a integração. As credenciais são gravadas pelo servidor e não ficam
+              acessíveis pela chave pública do portal.
+            </CardSubtitle>
           </CardHeader>
           <CardBody className="space-y-3">
             {type === 'ixc' && (
@@ -108,9 +120,13 @@ export default function ErpForm({ tenant }: { tenant: Tenant }) {
                     placeholder="https://central.seuprovedor.com.br"
                   />
                 </Field>
-                <Field label="Token (Base64 de usuário:apiKey)" hint="Gere no IXC em Configurações → Integrações → Webservice">
+                <Field
+                  label="Token (Base64 de usuário:apiKey)"
+                  hint={secretHint('token') ?? 'Gere no IXC em Configurações → Integrações → Webservice'}
+                >
                   <Input
                     type="password"
+                    placeholder={savedSecret('token') ? '••••••••••••' : undefined}
                     value={cfg.ixc?.token ?? ''}
                     onChange={(e) => updateCfg('token', e.target.value)}
                   />
@@ -132,9 +148,10 @@ export default function ErpForm({ tenant }: { tenant: Tenant }) {
                     onChange={(e) => updateCfg('app', e.target.value)}
                   />
                 </Field>
-                <Field label="Token">
+                <Field label="Token" hint={secretHint('token')}>
                   <Input
                     type="password"
+                    placeholder={savedSecret('token') ? '••••••••••••' : undefined}
                     value={cfg.sgp?.token ?? ''}
                     onChange={(e) => updateCfg('token', e.target.value)}
                   />
@@ -158,9 +175,10 @@ export default function ErpForm({ tenant }: { tenant: Tenant }) {
                       onChange={(e) => updateCfg('clientId', e.target.value)}
                     />
                   </Field>
-                  <Field label="Client Secret">
+                  <Field label="Client Secret" hint={secretHint('clientSecret')}>
                     <Input
                       type="password"
+                      placeholder={savedSecret('clientSecret') ? '••••••••' : undefined}
                       value={cfg.hubsoft?.clientSecret ?? ''}
                       onChange={(e) => updateCfg('clientSecret', e.target.value)}
                     />
@@ -171,9 +189,10 @@ export default function ErpForm({ tenant }: { tenant: Tenant }) {
                       onChange={(e) => updateCfg('username', e.target.value)}
                     />
                   </Field>
-                  <Field label="Senha">
+                  <Field label="Senha" hint={secretHint('password')}>
                     <Input
                       type="password"
+                      placeholder={savedSecret('password') ? '••••••••' : undefined}
                       value={cfg.hubsoft?.password ?? ''}
                       onChange={(e) => updateCfg('password', e.target.value)}
                     />

@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import type { Tenant, TenantLayout } from '@/lib/supabase/types';
+import type { PreviewTheme } from '@/lib/tenant/preview-protocol';
+import { PhonePreview } from './phone-preview';
 import { cn } from '@/lib/utils';
 
 const COLOR_PRESETS = [
@@ -33,33 +35,54 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     dark_mode_default: tenant.dark_mode_default,
     layout: tenant.layout as TenantLayout,
     logo_url: tenant.logo_url ?? '',
+    favicon_url: tenant.favicon_url ?? '',
     support_phone: tenant.support_phone ?? '',
     support_whatsapp: tenant.support_whatsapp ?? '',
     support_email: tenant.support_email ?? '',
   });
-  const [logoUploading, setLogoUploading] = useState(false);
+  const [uploading, setUploading] = useState<'logo_url' | 'favicon_url' | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function uploadLogo(file: File) {
-    setLogoUploading(true);
+  const MAX_ASSET_BYTES = 1024 * 1024;
+
+  async function uploadAsset(file: File, field: 'logo_url' | 'favicon_url') {
+    if (file.size > MAX_ASSET_BYTES) {
+      setError('Arquivo acima de 1MB. Escolha uma imagem menor.');
+      return;
+    }
+    setUploading(field);
     setError(null);
     const supabase = createClient();
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png';
-    const path = `tenants/${tenant.id}/logo-${Date.now()}.${ext}`;
+    const kind = field === 'logo_url' ? 'logo' : 'favicon';
+    const path = `tenants/${tenant.id}/${kind}-${Date.now()}.${ext}`;
     const { error: upErr } = await supabase.storage
       .from('tenant-assets')
       .upload(path, file, { cacheControl: '3600', upsert: false });
     if (upErr) {
       setError(upErr.message);
-      setLogoUploading(false);
+      setUploading(null);
       return;
     }
     const { data: pub } = supabase.storage.from('tenant-assets').getPublicUrl(path);
-    setForm((f) => ({ ...f, logo_url: pub.publicUrl }));
-    setLogoUploading(false);
+    setForm((f) => ({ ...f, [field]: pub.publicUrl }));
+    setUploading(null);
   }
+
+  // O que o mockup renderiza — o estado do formulário, não o que está salvo.
+  const previewTheme: PreviewTheme = {
+    name: form.name || tenant.name,
+    logo_url: form.logo_url || null,
+    primary_color: form.primary_color,
+    accent_color: form.accent_color,
+    dark_mode_default: form.dark_mode_default,
+    layout: form.layout,
+    support_phone: form.support_phone || null,
+    support_whatsapp: form.support_whatsapp || null,
+    support_email: form.support_email || null,
+  };
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +97,7 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
       dark_mode_default: form.dark_mode_default,
       layout: form.layout,
       logo_url: form.logo_url || null,
+      favicon_url: form.favicon_url || null,
       support_phone: form.support_phone || null,
       support_whatsapp: form.support_whatsapp || null,
       support_email: form.support_email || null,
@@ -90,7 +114,9 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="p-8 space-y-6 max-w-5xl">
+    <form onSubmit={onSubmit} className="p-8">
+      <div className="flex flex-col-reverse xl:flex-row xl:items-start gap-8">
+      <div className="flex-1 min-w-0 max-w-3xl space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Identidade visual</CardTitle>
@@ -101,42 +127,29 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
             <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           </Field>
 
-          <div>
-            <Label>Logo</Label>
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 rounded-md bg-bg-3 border border-border flex items-center justify-center overflow-hidden">
-                {form.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={form.logo_url} alt="Logo" className="w-full h-full object-cover" />
-                ) : (
-                  <div
-                    className="w-full h-full flex items-center justify-center font-bold text-white text-2xl"
-                    style={{ background: form.primary_color }}
-                  >
-                    {form.name[0]?.toUpperCase()}
-                  </div>
-                )}
-              </div>
-              <div>
-                <input
-                  type="file"
-                  id="logo-upload"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                  className="hidden"
-                  onChange={(e) => e.target.files?.[0] && uploadLogo(e.target.files[0])}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  loading={logoUploading}
-                  onClick={() => document.getElementById('logo-upload')?.click()}
-                >
-                  {logoUploading ? 'Enviando...' : 'Trocar logo'}
-                </Button>
-                <p className="text-xs text-fg-2 mt-2">PNG, JPG ou SVG, até 1MB</p>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <AssetField
+              id="logo-upload"
+              label="Logo"
+              hint="Aparece no topo da central e na tela de entrada. PNG, JPG ou SVG, até 1MB."
+              value={form.logo_url}
+              uploading={uploading === 'logo_url'}
+              fallback={form.name[0]?.toUpperCase() ?? '?'}
+              fallbackColor={form.primary_color}
+              onPick={(file) => uploadAsset(file, 'logo_url')}
+              onClear={() => setForm({ ...form, logo_url: '' })}
+            />
+            <AssetField
+              id="favicon-upload"
+              label="Ícone do navegador"
+              hint="O quadradinho na aba do navegador. Quadrado, 64×64 ou maior."
+              value={form.favicon_url}
+              uploading={uploading === 'favicon_url'}
+              fallback={form.name[0]?.toUpperCase() ?? '?'}
+              fallbackColor={form.accent_color}
+              onPick={(file) => uploadAsset(file, 'favicon_url')}
+              onClear={() => setForm({ ...form, favicon_url: '' })}
+            />
           </div>
 
           <div>
@@ -269,11 +282,94 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
         </CardBody>
       </Card>
 
-      <div className="flex items-center gap-3 sticky bottom-0 bg-bg-2 border-t border-border -mx-8 px-8 py-3">
+      <div className="flex items-center gap-3 sticky bottom-4 bg-bg-2 border border-border rounded-lg shadow-sm px-5 py-3">
         <Button type="submit" loading={saving}>Salvar alterações</Button>
         {saved && <span className="text-sm text-success">✓ Salvo</span>}
         {error && <span className="text-sm text-danger">{error}</span>}
       </div>
+      </div>
+
+      <aside className="shrink-0 self-center xl:self-start xl:sticky xl:top-6">
+        <PhonePreview tenantId={tenant.id} theme={previewTheme} />
+      </aside>
+      </div>
     </form>
+  );
+}
+
+function AssetField({
+  id,
+  label,
+  hint,
+  value,
+  uploading,
+  fallback,
+  fallbackColor,
+  onPick,
+  onClear,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  value: string;
+  uploading: boolean;
+  fallback: string;
+  fallbackColor: string;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex items-start gap-3">
+        <div className="w-16 h-16 shrink-0 rounded-md bg-bg-3 border border-border flex items-center justify-center overflow-hidden">
+          {value ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={value} alt={label} className="w-full h-full object-contain" />
+          ) : (
+            <div
+              className="w-full h-full flex items-center justify-center font-bold text-white text-xl"
+              style={{ background: fallbackColor }}
+            >
+              {fallback}
+            </div>
+          )}
+        </div>
+        <div className="min-w-0">
+          <input
+            type="file"
+            id={id}
+            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onPick(file);
+              e.target.value = '';
+            }}
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              loading={uploading}
+              onClick={() => document.getElementById(id)?.click()}
+            >
+              {value ? 'Trocar' : 'Enviar'}
+            </Button>
+            {value && (
+              <button
+                type="button"
+                onClick={onClear}
+                className="text-xs text-fg-2 hover:text-danger"
+              >
+                Remover
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-fg-2 mt-2 leading-relaxed">{hint}</p>
+        </div>
+      </div>
+    </div>
   );
 }

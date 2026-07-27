@@ -1,22 +1,26 @@
 import { notFound } from 'next/navigation';
 import { getCurrentTenant } from '@/lib/tenant/resolve';
-import { tenantCssVars } from '@/lib/tenant/theme';
+import { tenantCssText } from '@/lib/tenant/theme';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getCurrentTenant();
   if (!tenant) notFound();
 
-  const cssVars = tenantCssVars(tenant, tenant.dark_mode_default);
+  const dark = tenant.dark_mode_default;
 
   return (
-    <div
-      style={cssVars}
-      data-theme={tenant.dark_mode_default ? 'dark' : 'light'}
-      data-layout={tenant.layout}
-      className="min-h-screen bg-bg text-fg"
-    >
-      {children}
-    </div>
+    <>
+      {/* Em `:root` e não na div: o `body` também lê essas variáveis, então o
+          fundo do provedor cobre a tela inteira, inclusive no overscroll. */}
+      <style>{`:root{${tenantCssText(tenant, dark)}}`}</style>
+      <div
+        data-theme={dark ? 'dark' : 'light'}
+        data-layout={tenant.layout}
+        className="min-h-screen bg-bg text-fg"
+      >
+        {children}
+      </div>
+    </>
   );
 }
 

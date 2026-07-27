@@ -256,6 +256,21 @@ language sql stable security definer set search_path = public as $$
   );
 $$;
 
+-- Tenants onde o usuário pode gerenciar a equipe. Existe como função
+-- security definer (e não como subquery dentro da policy) porque uma policy
+-- de tenant_admins que consulta tenant_admins faz o Postgres abortar com
+-- 42P17 (infinite recursion).
+create or replace function public.user_managed_tenant_ids() returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select tenant_id from public.tenant_admins
+  where user_id = auth.uid() and role in ('owner', 'admin');
+$$;
+
+create or replace function public.user_customer_tenant_ids() returns setof uuid
+language sql stable security definer set search_path = public as $$
+  select tenant_id from public.customers where user_id = auth.uid();
+$$;
+
 alter table tenants            enable row level security;
 alter table tenant_admins      enable row level security;
 alter table customers          enable row level security;
@@ -265,13 +280,58 @@ alter table invoices           enable row level security;
 alter table support_tickets    enable row level security;
 alter table audit_log          enable row level security;
 
-create policy "tenants: public read branding" on tenants
-  for select using (true);
+-- A tabela crua guarda erp_config (credenciais do ERP), então só quem tem
+-- vínculo com o provedor lê. O app resolve tenant por service role; o
+-- branding público sai pela view tenants_public, mais abaixo.
+create policy "tenants: members read" on tenants
+  for select to authenticated
+  using (
+    id in (select public.user_tenant_ids())
+    or id in (select public.user_customer_tenant_ids())
+  );
 
 create policy "tenants: admins can update" on tenants
   for update to authenticated
   using (id in (select public.user_tenant_ids()))
   with check (id in (select public.user_tenant_ids()));
+
+-- Branding visível sem login (o portal aplica o tema antes do cliente
+-- autenticar). View sem security_invoker de propósito: roda como owner e
+-- por isso enxerga a tabela apesar da policy acima.
+create or replace view public.tenants_public as
+  select id, slug, name, status, layout,
+         primary_color, accent_color, dark_mode_default,
+         logo_url, favicon_url,
+         support_phone, support_whatsapp, support_email,
+         custom_domain, custom_domain_verified
+  from public.tenants;
+
+grant select on public.tenants_public to anon, authenticated;
+
+-- Um admin de tenant só edita aparência e contato. slug, status, domínio e
+-- credenciais de ERP mudam apenas por service role (route handlers/jobs) —
+-- sem isso, o navegador consegue se auto-ativar e marcar domínio como
+-- verificado. Sem security definer: current_user precisa ser quem chamou.
+create or replace function public.protect_tenant_columns() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  if current_user in ('service_role', 'postgres', 'supabase_admin') then
+    return new;
+  end if;
+  new.slug                   := old.slug;
+  new.status                 := old.status;
+  new.custom_domain          := old.custom_domain;
+  new.custom_domain_verified := old.custom_domain_verified;
+  new.erp_type               := old.erp_type;
+  new.erp_config             := old.erp_config;
+  new.created_at             := old.created_at;
+  return new;
+end;
+$$;
+
+-- "protect" antes de "updated": triggers BEFORE rodam em ordem alfabética.
+create trigger trg_tenants_protect before update on tenants
+  for each row execute function public.protect_tenant_columns();
 
 create policy "tenant_admins: owners/admins read" on tenant_admins
   for select to authenticated
@@ -279,18 +339,8 @@ create policy "tenant_admins: owners/admins read" on tenant_admins
 
 create policy "tenant_admins: owners manage" on tenant_admins
   for all to authenticated
-  using (
-    tenant_id in (
-      select tenant_id from tenant_admins
-      where user_id = auth.uid() and role in ('owner', 'admin')
-    )
-  )
-  with check (
-    tenant_id in (
-      select tenant_id from tenant_admins
-      where user_id = auth.uid() and role in ('owner', 'admin')
-    )
-  );
+  using (tenant_id in (select public.user_managed_tenant_ids()))
+  with check (tenant_id in (select public.user_managed_tenant_ids()));
 
 create policy "customers: tenant admins all" on customers
   for all to authenticated

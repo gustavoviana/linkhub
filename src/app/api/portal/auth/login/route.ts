@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
 import { getAdapterForTenant } from '@/lib/erp';
+import { isValidCpf } from '@/lib/utils';
+import { clientIp, rateLimit, rateLimitReset } from '@/lib/rate-limit';
 import type { Customer } from '@/lib/supabase/types';
 
 // Fluxo de login do cliente final:
@@ -25,9 +27,22 @@ export async function POST(req: NextRequest) {
     return new NextResponse('Campos faltando', { status: 400 });
   }
 
+  // Só CPF: é como as centrais dos provedores identificam o assinante, e é o
+  // número que o cliente sabe de cor.
   const cpfClean = String(cpf).replace(/\D/g, '');
-  if (cpfClean.length < 11) {
-    return new NextResponse('CPF inválido', { status: 400 });
+  if (cpfClean.length !== 11 || !isValidCpf(cpfClean)) {
+    return new NextResponse('CPF inválido. Confira os números e tente de novo.', { status: 400 });
+  }
+
+  // O CPF é público; a senha é o único segredo. Sem freio, dá para varrer
+  // senha de um assinante à vontade.
+  const limitKey = `portal-login:${tenant_id}:${cpfClean}:${clientIp(req.headers)}`;
+  const limit = rateLimit(limitKey, 8, 5 * 60_000);
+  if (!limit.allowed) {
+    return new NextResponse(
+      `Muitas tentativas. Espere ${Math.ceil(limit.retryAfterSeconds / 60)} minuto(s) e tente de novo.`,
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+    );
   }
 
   const admin = createAdminClient();
@@ -79,16 +94,19 @@ export async function POST(req: NextRequest) {
   }
 
   // 3. Vincula auth.user.
-  const syntheticEmail = customer.email
-    ? customer.email
-    : `cliente-${tenant.slug}-${cpfClean}@linkhub.local`;
+  //
+  // A identidade no Auth é derivada do CPF, nunca do e-mail do cadastro: dois
+  // assinantes podem compartilhar o mesmo e-mail (família, ou o provedor que
+  // cadastrou o próprio contato em todo mundo), e aí o segundo acesso batia em
+  // "e-mail já registrado" e ninguém entrava.
+  let authEmail = `cliente-${tenant.slug}-${cpfClean}@linkhub.local`;
 
   const sb = await createClient();
 
   if (!customer.user_id) {
     // Primeiro acesso: cria usuário Supabase com a senha fornecida.
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email: syntheticEmail,
+      email: authEmail,
       password,
       email_confirm: true,
       user_metadata: { tenant_id, customer_id: customer.id, cpf: cpfClean },
@@ -98,16 +116,22 @@ export async function POST(req: NextRequest) {
     }
     await (admin.from('customers').update({ user_id: created.user.id } as never)).eq('id', customer.id);
     customer.user_id = created.user.id;
+  } else {
+    // Já existe vínculo: usa o e-mail real do usuário, que pode ter sido
+    // criado por uma regra anterior à desta versão.
+    const { data: linked } = await admin.auth.admin.getUserById(customer.user_id);
+    if (linked?.user?.email) authEmail = linked.user.email;
   }
 
   // 4. Login.
   const { error: loginErr } = await sb.auth.signInWithPassword({
-    email: syntheticEmail,
+    email: authEmail,
     password,
   });
   if (loginErr) {
     return new NextResponse('CPF ou senha incorretos', { status: 401 });
   }
 
+  rateLimitReset(limitKey);
   return NextResponse.json({ ok: true });
 }

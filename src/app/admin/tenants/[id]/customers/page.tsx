@@ -4,6 +4,7 @@ import { requireTenantAdmin } from '@/lib/auth/session';
 import { Card, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { maskCpfCnpj, maskPhone } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { ResetPasswordButton } from './reset-password-button';
 
 export default async function CustomersPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -46,6 +47,7 @@ export default async function CustomersPage({ params }: { params: Promise<{ id: 
                   <th className="text-left px-4 py-2.5">Contato</th>
                   <th className="text-left px-4 py-2.5">Cidade</th>
                   <th className="text-left px-4 py-2.5">Acesso</th>
+                  <th className="text-left px-4 py-2.5">Senha</th>
                 </tr>
               </thead>
               <tbody>
@@ -66,6 +68,14 @@ export default async function CustomersPage({ params }: { params: Promise<{ id: 
                       ) : (
                         <Badge tone="neutral">sem login</Badge>
                       )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ResetPasswordButton
+                        tenantId={id}
+                        customerId={c.id}
+                        customerName={c.name}
+                        linked={!!c.user_id}
+                      />
                     </td>
                   </tr>
                 ))}

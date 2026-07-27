@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>App Provedor — Central do Cliente · Variações</title>
+<style>
+  html, body, #root { margin: 0; height: 100%; background: #f0eee9; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+</style>
+<script type="application/json" id="__bundler_thumbnail_data">{}</script>
+<template id="__bundler_thumbnail">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect width="100" height="100" fill="#5b6cff"/>
+    <g fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round">
+      <path d="M30 55c10-10 30-10 40 0"/>
+      <path d="M37 62c6-6 20-6 26 0"/>
+      <path d="M44 69c2-2 10-2 12 0"/>
+      <circle cx="50" cy="76" r="2.4" fill="#fff" stroke="none"/>
+    </g>
+  </svg>
+</template>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="src/shared.jsx"></script>
+  <script type="text/babel" src="src/v1.jsx"></script>
+  <script type="text/babel" src="src/v2.jsx"></script>
+  <script type="text/babel" src="src/v3.jsx"></script>
+  <script type="text/babel" src="src/charts.jsx"></script>
+  <script type="text/babel" src="src/web.jsx"></script>
+
+  <script type="text/babel" data-presets="env,react">
+    const { DesignCanvas, DCSection, DCArtboard, DCPostIt } = window;
+    const { Phone, Icon } = window;
+    const { V1, V2, V3, NetCharts, WebDashboard } = window;
+
+    // Phone artboard — must use DCArtboard directly (DCSection requires direct children)
+    const ph = (id, label, V, key, dark, statusDark) => {
+      const Comp = V[key];
+      return (
+        <DCArtboard key={id} id={id} label={label} width={400} height={830}>
+          <Phone dark={dark} statusDark={statusDark}><Comp dark={dark}/></Phone>
+        </DCArtboard>
+      );
+    };
+    const ch = (id, label, Comp, dark) => (
+      <DCArtboard key={id} id={id} label={label} width={420} height={420}>
+        <div style={{ width: '100%', height: '100%', padding: 20, background: dark ? '#0b0e16' : '#ffffff', borderRadius: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.06)' }}>
+          <Comp dark={dark}/>
+        </div>
+      </DCArtboard>
+    );
+
+    function App() {
+      return (
+        <DesignCanvas>
+          <DCPostIt>
+            <strong>App Provedor — Central do Cliente</strong><br/>
+            Mockup integrável com IXC / SGP / Hubsoft. Três variações de layout (V1 Clean Minimal, V2 Neo Premium, V3 Friendly Bold), cada uma em <strong>light + dark</strong>. Foco em mobile, mas com versão web no final.
+          </DCPostIt>
+
+          <DCSection id="login" title="01 · Tela de Login" subtitle="3 variações de layout — light & dark · CPF + senha + biometria/QR/WhatsApp">
+            {ph('v1-login-l','V1 Clean · Light',V1,'Login',false,false)}
+            {ph('v1-login-d','V1 Clean · Dark',V1,'Login',true,true)}
+            {ph('v2-login-l','V2 Neo · Light',V2,'Login',false,false)}
+            {ph('v2-login-d','V2 Neo · Dark',V2,'Login',true,true)}
+            {ph('v3-login-l','V3 Friendly · Light',V3,'Login',false,true)}
+            {ph('v3-login-d','V3 Friendly · Dark',V3,'Login',true,true)}
+          </DCSection>
+
+          <DCSection id="home" title="02 · Home / Dashboard mobile" subtitle="Saudação, fatura aberta, conexão ao vivo, atalhos para 2ª via, Pix, Wi-Fi, suporte">
+            {ph('v1-home-l','V1 Clean · Light',V1,'Home',false,false)}
+            {ph('v1-home-d','V1 Clean · Dark',V1,'Home',true,true)}
+            {ph('v2-home-l','V2 Neo · Light',V2,'Home',false,false)}
+            {ph('v2-home-d','V2 Neo · Dark',V2,'Home',true,true)}
+            {ph('v3-home-l','V3 Friendly · Light',V3,'Home',false,true)}
+            {ph('v3-home-d','V3 Friendly · Dark',V3,'Home',true,true)}
+          </DCSection>
+
+          <DCSection id="fatura" title="03 · Pagamento — Pix · Boleto · Cartão" subtitle="2ª via, QR Pix, copia-e-cola e métodos alternativos">
+            {ph('v1-fat-l','V1 Clean · Light',V1,'Fatura',false,false)}
+            {ph('v1-fat-d','V1 Clean · Dark',V1,'Fatura',true,true)}
+            {ph('v2-fat-l','V2 Neo · Light',V2,'Fatura',false,false)}
+            {ph('v2-fat-d','V2 Neo · Dark',V2,'Fatura',true,true)}
+            {ph('v3-fat-l','V3 Friendly · Light',V3,'Fatura',false,true)}
+            {ph('v3-fat-d','V3 Friendly · Dark',V3,'Fatura',true,true)}
+          </DCSection>
+
+          <DCSection id="charts" title="04 · Gráfico de consumo de rede" subtitle="3 variações: área suave, barras por hora, anel radial. Light & dark.">
+            {ch('ch1-l','V1 Área · Light',NetCharts.ChartArea,false)}
+            {ch('ch1-d','V1 Área · Dark',NetCharts.ChartArea,true)}
+            {ch('ch2-l','V2 Barras · Light',NetCharts.ChartBars,false)}
+            {ch('ch2-d','V2 Barras · Dark',NetCharts.ChartBars,true)}
+            {ch('ch3-l','V3 Anel · Light',NetCharts.ChartRadial,false)}
+            {ch('ch3-d','V3 Anel · Dark',NetCharts.ChartRadial,true)}
+          </DCSection>
+
+          <DCSection id="web" title="05 · Versão Web (PC)" subtitle="Dashboard completo: KPIs, gráfico, pagamento, atendimentos, plano. Light & dark.">
+            <DCArtboard id="web-l" label="Web · Light" width={1320} height={840}>
+              <WebDashboard dark={false}/>
+            </DCArtboard>
+            <DCArtboard id="web-d" label="Web · Dark" width={1320} height={840}>
+              <WebDashboard dark={true}/>
+            </DCArtboard>
+          </DCSection>
+        </DesignCanvas>
+      );
+    }
+
+    // Wait for all globals to load
+    function start() {
+      if (!window.DesignCanvas || !window.V1 || !window.V2 || !window.V3 || !window.NetCharts || !window.WebDashboard || !window.Phone) {
+        return setTimeout(start, 50);
+      }
+      ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+    }
+    start();
+  </script>
+</body>
+</html>

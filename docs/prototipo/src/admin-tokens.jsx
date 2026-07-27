@@ -1,0 +1,21 @@
+// LinkHub Admin — shared tokens
+window.LHTokens = (dark) => ({
+  bg: dark ? '#0c0a14' : '#f8f8fb',
+  surface: dark ? '#141122' : '#ffffff',
+  surface2: dark ? '#1b1730' : '#f4f4f8',
+  border: dark ? '#272040' : '#e8e8ef',
+  borderSoft: dark ? '#1f1a35' : '#f0f0f5',
+  text: dark ? '#f0eefa' : '#12101c',
+  text2: dark ? '#a29cc0' : '#5c5870',
+  text3: dark ? '#6f6890' : '#8f8ba5',
+  accent: '#7c5cfc',
+  accentSoft: dark ? 'rgba(124,92,252,0.16)' : '#f1edff',
+  green: dark ? '#34d399' : '#0e9f6e',
+  greenSoft: dark ? 'rgba(52,211,153,0.14)' : '#e7faf2',
+  amber: dark ? '#fbbf24' : '#b45309',
+  amberSoft: dark ? 'rgba(251,191,36,0.14)' : '#fef6e7',
+  red: dark ? '#fb7185' : '#dc2626',
+  redSoft: dark ? 'rgba(251,113,133,0.14)' : '#fef2f2',
+  font: '"Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
+  mono: 'ui-monospace, "SF Mono", Menlo, monospace',
+});

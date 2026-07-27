@@ -5,6 +5,7 @@ import { MockAdapter } from './mock';
 import { IxcAdapter } from './ixc';
 import { SgpAdapter } from './sgp';
 import { HubsoftAdapter } from './hubsoft';
+import { decryptErpConfig } from './crypto';
 
 export * from './types';
 
@@ -13,7 +14,7 @@ export * from './types';
 // durante o onboarding do provedor.
 
 export function getAdapterForTenant(tenant: Tenant): ErpAdapter {
-  const cfg = tenant.erp_config as ErpConfig;
+  const cfg = decryptErpConfig(tenant.erp_config) as ErpConfig;
   try {
     switch (tenant.erp_type) {
       case 'ixc':

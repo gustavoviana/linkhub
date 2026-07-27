@@ -3,10 +3,11 @@ import { requireTenant } from '@/lib/tenant/resolve';
 import { getCurrentCustomer } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAdapterForTenant } from '@/lib/erp';
-import { BottomNav } from '@/components/portal/bottom-nav';
+import { PortalShell } from '@/components/portal/shell';
 import { HomeV1 } from '@/components/portal/home-v1';
 import { HomeV2 } from '@/components/portal/home-v2';
 import { HomeV3 } from '@/components/portal/home-v3';
+import { WebDashboard } from '@/components/portal/web-dashboard';
 import type { Contract, Invoice, Plan } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
@@ -121,14 +122,18 @@ export default async function PortalHome() {
     recentInvoices,
   };
 
-  const Layout = tenant.layout === 'v2' ? HomeV2 : tenant.layout === 'v3' ? HomeV3 : HomeV1;
+  const Home = tenant.layout === 'v2' ? HomeV2 : tenant.layout === 'v3' ? HomeV3 : HomeV1;
 
   return (
-    <div className="md:flex">
-      <BottomNav />
-      <main className="flex-1 min-h-screen">
-        <Layout {...props} />
-      </main>
-    </div>
+    <PortalShell tenant={tenant} customer={customer} wide>
+      {/* Celular: um dos três layouts escolhidos pelo provedor. */}
+      <div className="lg:hidden">
+        <Home {...props} />
+      </div>
+      {/* Desktop: painel completo, com KPIs e histórico lado a lado. */}
+      <div className="hidden lg:block">
+        <WebDashboard {...props} />
+      </div>
+    </PortalShell>
   );
 }

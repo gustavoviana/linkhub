@@ -26,6 +26,7 @@ export default async function TenantLayout({
     { href: `/admin/tenants/${id}`, label: 'Visão geral' },
     { href: `/admin/tenants/${id}/branding`, label: 'Marca & visual' },
     { href: `/admin/tenants/${id}/erp`, label: 'Integração ERP' },
+    { href: `/admin/tenants/${id}/dominio`, label: 'Domínio' },
     { href: `/admin/tenants/${id}/customers`, label: 'Clientes' },
     { href: `/admin/tenants/${id}/plans`, label: 'Planos' },
     { href: `/admin/tenants/${id}/team`, label: 'Equipe' },

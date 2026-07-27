@@ -1,153 +1,344 @@
-// Layout V1 — Clean Minimal. Hierarquia tipográfica, muito espaço em branco,
-// cards com bordas finas e sem sombra.
+'use client';
+
+// Layout V1 — Clean Minimal. Portado de docs/prototipo/src/v1.jsx:
+// hierarquia tipográfica, muito respiro, cards de borda fina sem sombra.
 
 import Link from 'next/link';
-import type { Tenant, Customer, Contract, Plan, Invoice } from '@/lib/supabase/types';
-import { formatBRL, formatDate } from '@/lib/utils';
-import { IconBolt, IconFile, IconHelp, IconWifi, IconArrow } from './icons';
-import { Badge } from '@/components/ui/badge';
+import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
+import { Icon } from './icons';
+import { portalTokens } from './tokens';
+import { BrandMark, PortalScreenProps, daysUntil, initials } from './ui';
+import { NetChart } from './net-chart';
 
-interface HomeProps {
-  tenant: Tenant;
-  customer: Customer;
-  contract: Contract | null;
-  plan: Plan | null;
-  openInvoice: Invoice | null;
-  recentInvoices: Invoice[];
-}
-
-export function HomeV1({ tenant, customer, contract, plan, openInvoice, recentInvoices }: HomeProps) {
+export function HomeV1(props: PortalScreenProps) {
+  const { tenant, customer, contract, plan, openInvoice, recentInvoices } = props;
+  const t = portalTokens(tenant, tenant.dark_mode_default);
   const firstName = customer.name.split(' ')[0];
 
   return (
-    <div className="max-w-md mx-auto md:max-w-3xl px-4 py-6 pb-24 md:pb-6">
-      <header className="flex items-center justify-between mb-8">
-        <div>
-          <div className="text-xs text-fg-2">Olá,</div>
-          <h1 className="text-2xl font-bold tracking-tight">{firstName} 👋</h1>
-        </div>
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm"
-          style={{ background: 'rgb(var(--brand) / 0.1)', color: 'rgb(var(--brand))' }}
-        >
-          {customer.name.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-        </div>
-      </header>
-
-      {openInvoice && (
-        <Link href={`/fatura/${openInvoice.id}`} className="block mb-6">
-          <div
-            className="rounded-2xl p-6 text-white relative overflow-hidden"
-            style={{ background: `linear-gradient(135deg, rgb(var(--brand)), rgb(var(--accent)))` }}
+    <div style={{ background: t.bg, color: t.text, minHeight: '100%', paddingBottom: 110 }}>
+      <div style={{ maxWidth: 520, margin: '0 auto' }}>
+        <div style={{ padding: '16px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <BrandMark tenant={tenant} t={t} size={30} />
+          <Link
+            href="/conta"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              background: t.accentSoft,
+              color: t.accent,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 14,
+              fontWeight: 700,
+            }}
           >
-            <div className="relative z-10">
-              <div className="text-xs opacity-80 uppercase tracking-wider font-semibold">
-                Próxima fatura
+            {initials(customer.name)}
+          </Link>
+        </div>
+
+        <div style={{ padding: '18px 24px 0' }}>
+          <div style={{ fontSize: 13, color: t.text2 }}>Olá,</div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.01em' }}>{firstName}</div>
+        </div>
+
+        {openInvoice ? (
+          <Link href={`/fatura/${openInvoice.id}`} style={{ display: 'block' }}>
+            <div
+              style={{
+                margin: '20px 20px 16px',
+                padding: 22,
+                borderRadius: t.radius,
+                background: t.accentGrad,
+                color: t.accentFg,
+                boxShadow: `0 16px 30px -12px ${t.accent}66`,
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                <span style={{ fontSize: 11, opacity: 0.85, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600 }}>
+                  Próxima fatura
+                </span>
+                <span style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(255,255,255,0.18)', borderRadius: 12, fontWeight: 600 }}>
+                  {dueLabel(openInvoice.due_date)}
+                </span>
               </div>
-              <div className="text-3xl font-bold mt-2 font-mono tabular-nums">
+              <div style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.02em', fontFamily: t.mono, marginTop: 6 }}>
                 {formatBRL(openInvoice.amount_cents)}
               </div>
-              <div className="text-sm opacity-90 mt-1">
+              <div style={{ fontSize: 13, opacity: 0.88, marginTop: 2 }}>
                 Vence {formatDate(openInvoice.due_date)}
                 {plan && ` · ${plan.name}`}
               </div>
-              <button
-                className="mt-4 inline-flex items-center gap-2 bg-white text-fg font-medium px-4 py-2 rounded-lg text-sm"
-                style={{ color: tenant.primary_color }}
-              >
-                Pagar com Pix <IconArrow size={14} />
-              </button>
-            </div>
-            <div className="absolute -right-8 -top-8 w-40 h-40 rounded-full bg-white/10" />
-          </div>
-        </Link>
-      )}
-
-      <div className="grid grid-cols-4 gap-2 mb-6">
-        <ShortcutV1 href="/fatura" icon={<IconFile size={20} />} label="2ª via" />
-        <ShortcutV1 href="/suporte" icon={<IconHelp size={20} />} label="Suporte" />
-        <ShortcutV1 href="/conta" icon={<IconBolt size={20} />} label="Velocidade" />
-        <ShortcutV1 href="/conta/plano" icon={<IconWifi size={20} />} label="Plano" />
-      </div>
-
-      {contract && plan && (
-        <section className="bg-bg-2 border border-border rounded-xl p-5 mb-6">
-          <header className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <IconWifi size={16} />
-              <span className="font-semibold text-sm">Sua conexão</span>
-            </div>
-            <Badge tone="success">online</Badge>
-          </header>
-          <div className="grid grid-cols-2 gap-4">
-            <Stat label="Download" value={`${plan.down_mbps ?? '—'}`} unit="Mbps" />
-            <Stat label="Upload" value={`${plan.up_mbps ?? '—'}`} unit="Mbps" />
-            <Stat label="Plano" value={plan.name} small />
-            <Stat label="Vencimento" value={`dia ${contract.due_day ?? plan.name}`} small />
-          </div>
-        </section>
-      )}
-
-      <h2 className="text-xs font-semibold uppercase tracking-wider text-fg-2 mb-3">
-        Últimas faturas
-      </h2>
-      <div className="space-y-2">
-        {recentInvoices.map((inv) => (
-          <Link
-            key={inv.id}
-            href={`/fatura/${inv.id}`}
-            className="flex items-center gap-3 bg-bg-2 border border-border rounded-xl p-4"
-          >
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-xs ${
-                inv.status === 'paid' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
-              }`}
-            >
-              {inv.status === 'paid' ? '✓' : '!'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-sm">
-                {inv.reference_month
-                  ? new Date(inv.reference_month).toLocaleDateString('pt-BR', {
-                      month: 'long',
-                      year: 'numeric',
-                    })
-                  : formatDate(inv.due_date)}
+              <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+                <span
+                  style={{
+                    flex: 1,
+                    height: 42,
+                    borderRadius: 12,
+                    background: '#fff',
+                    color: t.accent,
+                    fontWeight: 700,
+                    fontSize: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Icon name="pix" size={15} /> Pagar com Pix
+                </span>
+                <span
+                  style={{
+                    width: 42,
+                    height: 42,
+                    borderRadius: 12,
+                    border: '1px solid rgba(255,255,255,0.3)',
+                    background: 'rgba(255,255,255,0.12)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name="barcode" size={16} />
+                </span>
               </div>
-              <div className="text-xs text-fg-2">{formatBRL(inv.amount_cents)}</div>
             </div>
-            <IconArrow size={14} className="text-fg-3" />
           </Link>
-        ))}
+        ) : (
+          <NoOpenInvoice t={t} />
+        )}
+
+        <div style={{ padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+          <Shortcut t={t} href="/fatura" icon="barcode" label="2ª via" />
+          <Shortcut t={t} href="/conta" icon="speed" label="Velocidade" />
+          <Shortcut t={t} href="/suporte" icon="help" label="Suporte" />
+          <Shortcut t={t} href="/conta" icon="settings" label="Plano" />
+        </div>
+
+        {contract && (
+          <div style={{ margin: '0 20px 14px', padding: 18, background: t.surface, border: `1px solid ${t.border}`, borderRadius: 18 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 10,
+                  background: t.successSoft,
+                  color: t.success,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="wifi" size={18} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600 }}>Sua conexão</div>
+                <div style={{ fontSize: 12, color: t.text2 }}>
+                  {plan ? `${plan.name} · ${plan.down_mbps ?? '—'} / ${plan.up_mbps ?? '—'} Mbps` : 'Contrato ativo'}
+                </div>
+              </div>
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: '4px 10px',
+                  borderRadius: 10,
+                  background: t.successSoft,
+                  color: t.success,
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <span style={{ width: 6, height: 6, borderRadius: 3, background: t.success }} />
+                {contract.status === 'active' ? 'Online' : contract.status}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <Stat t={t} label="Download" value={plan?.down_mbps ?? null} unit="Mbps" />
+              <Stat t={t} label="Upload" value={plan?.up_mbps ?? null} unit="Mbps" />
+            </div>
+          </div>
+        )}
+
+        <div style={{ margin: '0 20px 14px' }}>
+          <NetChart t={t} />
+        </div>
+
+        <div style={{ margin: '8px 20px 0' }}>
+          <div
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em',
+              color: t.text2,
+              marginBottom: 10,
+              display: 'flex',
+              justifyContent: 'space-between',
+            }}
+          >
+            <span>Últimas faturas</span>
+            <Link href="/fatura" style={{ color: t.accent }}>Ver todas</Link>
+          </div>
+          {recentInvoices.length === 0 && (
+            <div style={{ fontSize: 13, color: t.text2, padding: '8px 0' }}>Nenhuma fatura por aqui ainda.</div>
+          )}
+          {recentInvoices.map((inv) => {
+            const paid = inv.status === 'paid';
+            return (
+              <Link
+                key={inv.id}
+                href={`/fatura/${inv.id}`}
+                style={{
+                  padding: 14,
+                  background: t.surface,
+                  border: `1px solid ${t.border}`,
+                  borderRadius: 14,
+                  marginBottom: 8,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                <div
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    background: paid ? t.successSoft : t.accentSoft,
+                    color: paid ? t.success : t.accent,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon name={paid ? 'check' : 'file'} size={16} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>
+                    {inv.reference_month ? formatMonthYear(inv.reference_month) : formatDate(inv.due_date)}
+                  </div>
+                  <div style={{ fontSize: 12, color: t.text2, fontFamily: t.mono }}>{formatBRL(inv.amount_cents)}</div>
+                </div>
+                <Icon name="chevron" size={16} color={t.text3} />
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-function ShortcutV1({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
+function dueLabel(due: string) {
+  const d = daysUntil(due);
+  if (d < 0) return `${Math.abs(d)} d atrasada`;
+  if (d === 0) return 'vence hoje';
+  return `${d} dias`;
+}
+
+function Shortcut({
+  t,
+  href,
+  icon,
+  label,
+}: {
+  t: ReturnType<typeof portalTokens>;
+  href: string;
+  icon: 'barcode' | 'speed' | 'help' | 'settings';
+  label: string;
+}) {
   return (
     <Link
       href={href}
-      className="flex flex-col items-center gap-2 py-3 bg-bg-2 border border-border rounded-xl hover:border-fg-3 transition-colors"
+      style={{
+        background: t.surface,
+        border: `1px solid ${t.border}`,
+        borderRadius: 14,
+        padding: '12px 4px 10px',
+        textAlign: 'center',
+        display: 'block',
+      }}
     >
       <div
-        className="w-8 h-8 rounded-md flex items-center justify-center"
-        style={{ background: 'rgb(var(--brand) / 0.1)', color: 'rgb(var(--brand))' }}
+        style={{
+          width: 36,
+          height: 36,
+          margin: '0 auto',
+          borderRadius: 10,
+          background: t.accentSoft,
+          color: t.accent,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
-        {icon}
+        <Icon name={icon} size={17} />
       </div>
-      <span className="text-[11px] font-medium">{label}</span>
+      <div style={{ fontSize: 11, marginTop: 7, fontWeight: 500, color: t.text }}>{label}</div>
     </Link>
   );
 }
 
-function Stat({ label, value, unit, small }: { label: string; value: string; unit?: string; small?: boolean }) {
+function Stat({
+  t,
+  label,
+  value,
+  unit,
+}: {
+  t: ReturnType<typeof portalTokens>;
+  label: string;
+  value: number | null;
+  unit: string;
+}) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-fg-2">{label}</div>
-      <div className={`font-semibold ${small ? 'text-sm' : 'text-lg'} font-mono mt-1`}>
-        {value}
-        {unit && <span className="text-xs text-fg-2 ml-1 font-sans">{unit}</span>}
+      <div style={{ fontSize: 10, color: t.text2, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 20, fontWeight: 700, fontFamily: t.mono, letterSpacing: '-0.02em' }}>
+        {value ?? '—'}
+        <span style={{ fontSize: 12, color: t.text2, fontWeight: 500, marginLeft: 4 }}>{unit}</span>
+      </div>
+    </div>
+  );
+}
+
+export function NoOpenInvoice({ t }: { t: ReturnType<typeof portalTokens> }) {
+  return (
+    <div
+      style={{
+        margin: '20px 20px 16px',
+        padding: 22,
+        borderRadius: t.radius,
+        background: t.successSoft,
+        border: `1px solid ${t.success}33`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          width: 40,
+          height: 40,
+          borderRadius: 12,
+          background: t.success,
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Icon name="check" size={20} />
+      </div>
+      <div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: t.success }}>Tudo em dia</div>
+        <div style={{ fontSize: 13, color: t.text2 }}>Você não tem faturas em aberto.</div>
       </div>
     </div>
   );
