@@ -349,9 +349,12 @@ function labelIndexes(n: number, plotWidth: number) {
   const step = Math.max(1, Math.ceil((n - 1) / (fits - 1)));
   const out: number[] = [];
   for (let i = 0; i < n; i += step) out.push(i);
-  const last = out[out.length - 1];
+  // O último ponto sempre aparece. Se ele cair perto demais do rótulo
+  // anterior, toma o lugar dele em vez de se empilhar em cima — era o que
+  // deixava "25/0727/07" no fim do período de 30 dias.
+  const last = out[out.length - 1]!;
   if (last !== n - 1) {
-    if (n - 1 - last < step * 0.6) out[out.length - 1] = n - 1;
+    if (n - 1 - last < step) out[out.length - 1] = n - 1;
     else out.push(n - 1);
   }
   return out;
