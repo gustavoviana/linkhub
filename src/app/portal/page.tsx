@@ -133,37 +133,46 @@ export default async function PortalHome() {
     plan = await ensurePlanFromContract(supabase, tenant, contract, adapter, customer.external_id);
   }
 
-  // 2. Faturas — sempre busca do ERP para garantir frescor de status/Pix.
+  // 2. Faturas — uma gravação só, com todas de uma vez. Gravar uma a uma
+  // custava ~15s de carregamento com 60 faturas, porque cada upsert é uma
+  // viagem até o banco.
   let openInvoice: Invoice | null = null;
   let recentInvoices: Invoice[] = [];
   if (contract?.external_id) {
-    try {
-      const fresh = await adapter.listInvoicesByContract(contract.external_id);
-      for (const inv of fresh) {
-        await supabase.from('invoices').upsert(
-          {
-            tenant_id: tenant.id,
-            contract_id: contract.id,
-            external_id: inv.externalId,
-            reference_month: inv.referenceMonth,
-            due_date: inv.dueDate,
-            amount_cents: inv.amountCents,
-            status: inv.status,
-            pix_copy_paste: inv.pixCopyPaste,
-            pix_qr_code: inv.pixQrCode,
-            boleto_line: inv.boletoLine,
-            boleto_pdf_url: inv.boletoPdfUrl,
-            nfe_url: inv.nfeUrl,
-            paid_at: inv.paidAt,
-            paid_amount_cents: inv.paidAmountCents,
-            paid_method: inv.paidMethod,
-            last_synced_at: new Date().toISOString(),
-          },
-          { onConflict: 'tenant_id,external_id' },
-        );
+    const syncedAt = contract.last_synced_at ? new Date(contract.last_synced_at).getTime() : 0;
+    const stale = Date.now() - syncedAt > 5 * 60_000;
+
+    if (stale) {
+      try {
+        const fresh = await adapter.listInvoicesByContract(contract.external_id);
+        if (fresh.length) {
+          const now = new Date().toISOString();
+          await supabase.from('invoices').upsert(
+            fresh.map((inv) => ({
+              tenant_id: tenant.id,
+              contract_id: contract.id,
+              external_id: inv.externalId,
+              reference_month: inv.referenceMonth,
+              due_date: inv.dueDate,
+              amount_cents: inv.amountCents,
+              status: inv.status,
+              pix_copy_paste: inv.pixCopyPaste,
+              pix_qr_code: inv.pixQrCode,
+              boleto_line: inv.boletoLine,
+              boleto_pdf_url: inv.boletoPdfUrl,
+              nfe_url: inv.nfeUrl,
+              paid_at: inv.paidAt,
+              paid_amount_cents: inv.paidAmountCents,
+              paid_method: inv.paidMethod,
+              last_synced_at: now,
+            })) as never,
+            { onConflict: 'tenant_id,external_id' },
+          );
+          await supabase.from('contracts').update({ last_synced_at: now } as never).eq('id', contract.id);
+        }
+      } catch (e) {
+        console.error('[portal] invoice sync failed', e);
       }
-    } catch (e) {
-      console.error('[portal] invoice sync failed', e);
     }
 
     // A fatura em destaque é a mais antiga ainda não paga: se há atraso, é a
@@ -197,7 +206,9 @@ export default async function PortalHome() {
       console.error('[portal] connection lookup failed', e);
     }
     try {
-      usage = (await adapter.getUsage?.(contract.external_id, 7)) ?? [];
+      // Reaproveita o login que já veio da conexão — sem isso o adapter
+      // consultaria o ERP de novo só para descobrir o mesmo usuário.
+      usage = (await adapter.getUsage?.(contract.external_id, 7, connection?.login)) ?? [];
     } catch (e) {
       console.error('[portal] usage lookup failed', e);
     }

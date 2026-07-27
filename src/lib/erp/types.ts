@@ -105,7 +105,20 @@ export interface ErpAdapter {
 
   /** Opcionais: nem todo ERP expõe. A central esconde o bloco quando faltam. */
   getConnection?(contractExternalId: string): Promise<ErpConnection | null>;
-  getUsage?(contractExternalId: string, days?: number): Promise<ErpUsagePoint[]>;
+  getUsage?(contractExternalId: string, days?: number, login?: string): Promise<ErpUsagePoint[]>;
+  /** Pix é gerado na hora pelo ERP — não faz sentido guardar cópia velha. */
+  getInvoicePix?(invoiceExternalId: string): Promise<ErpPix | null>;
+  /** PDF do boleto em base64, quando o ERP sabe emitir. */
+  getInvoiceBoletoPdf?(invoiceExternalId: string): Promise<string | null>;
+}
+
+export interface ErpPix {
+  /** Código copia e cola (EMV). */
+  copyPaste: string;
+  /** PNG do QR em base64, sem o prefixo data:. */
+  qrImageBase64?: string;
+  expiresAt?: string;
+  status?: string;
 }
 
 export type ErpConfig = {

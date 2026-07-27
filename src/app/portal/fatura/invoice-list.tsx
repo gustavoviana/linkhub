@@ -6,12 +6,20 @@ import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, rgba } from '@/components/portal/tokens';
 import { ScreenHeader } from '@/components/portal/shell';
+import { invoiceStanding } from '@/components/portal/ui';
 
 export function InvoiceList({ tenant, invoices }: { tenant: Tenant; invoices: Invoice[] }) {
   const t = portalTokens(tenant, tenant.dark_mode_default);
 
-  const open = invoices.filter((i) => i.status !== 'paid' && i.status !== 'cancelled');
-  const closed = invoices.filter((i) => i.status === 'paid' || i.status === 'cancelled');
+  // Em aberto: vencimento mais próximo primeiro — é o que o assinante
+  // precisa resolver. Pagas: as três últimas bastam para ele se situar.
+  const open = invoices
+    .filter((i) => i.status !== 'paid' && i.status !== 'cancelled')
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const closed = invoices
+    .filter((i) => i.status === 'paid' || i.status === 'cancelled')
+    .sort((a, b) => b.due_date.localeCompare(a.due_date))
+    .slice(0, 3);
 
   return (
     <div>
@@ -79,9 +87,10 @@ function Group({
 
 function Row({ t, invoice }: { t: ReturnType<typeof portalTokens>; invoice: Invoice }) {
   const paid = invoice.status === 'paid';
-  const overdue = invoice.status === 'overdue';
+  const { overdue, label } = invoiceStanding(invoice);
   const color = paid ? t.success : overdue ? t.danger : t.accent;
-  const label = paid ? 'Paga' : overdue ? 'Em atraso' : invoice.status === 'partial' ? 'Parcial' : 'Em aberto';
+  // "vencida há 3 dias" diz mais que "em atraso".
+  const standing = paid ? 'Paga' : label;
 
   return (
     <Link
@@ -112,16 +121,19 @@ function Row({ t, invoice }: { t: ReturnType<typeof portalTokens>; invoice: Invo
         <Icon name={paid ? 'check' : 'file'} size={18} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600 }}>
+        <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>
           {invoice.reference_month ? formatMonthYear(invoice.reference_month) : formatDate(invoice.due_date)}
         </div>
         <div style={{ fontSize: 12, color: t.text2 }}>
-          Vence {formatDate(invoice.due_date)}
+          Vence{' '}
+          <strong style={{ color: t.text, fontWeight: 700, fontFamily: t.mono }}>
+            {formatDate(invoice.due_date)}
+          </strong>
         </div>
       </div>
       <div style={{ textAlign: 'right' }}>
         <div style={{ fontSize: 14, fontWeight: 700, fontFamily: t.mono }}>{formatBRL(invoice.amount_cents)}</div>
-        <div style={{ fontSize: 11, color, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 11, color, fontWeight: 600 }}>{standing}</div>
       </div>
       <Icon name="chevron" size={16} color={t.text3} />
     </Link>

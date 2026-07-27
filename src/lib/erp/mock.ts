@@ -1,4 +1,4 @@
-import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConnection, ErpUsagePoint } from './types';
+import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConnection, ErpUsagePoint, ErpPix } from './types';
 
 // Adapter de teste — usado pelo tenant 'demo' e quando nenhum ERP foi
 // configurado ainda. Dados determinísticos pelo CPF pra facilitar QA.
@@ -130,6 +130,12 @@ export class MockAdapter implements ErpAdapter {
       });
     }
     return out;
+  }
+
+  async getInvoicePix(invoiceExternalId: string): Promise<ErpPix | null> {
+    const inv = await this.getInvoice(invoiceExternalId);
+    if (!inv?.pixCopyPaste) return null;
+    return { copyPaste: inv.pixCopyPaste, status: 'ATIVA' };
   }
 
   async getInvoice(invoiceExternalId: string): Promise<ErpInvoice | null> {

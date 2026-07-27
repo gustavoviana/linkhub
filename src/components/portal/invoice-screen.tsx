@@ -57,7 +57,10 @@ export function InvoiceScreen({
             {formatBRL(invoice.amount_cents)}
           </div>
           <div style={{ fontSize: 13, color: t.text2, marginTop: 4 }}>
-            Vencimento {formatDate(invoice.due_date)}
+            Vencimento{' '}
+            <strong style={{ color: t.text, fontWeight: 700, fontFamily: t.mono }}>
+              {formatDate(invoice.due_date)}
+            </strong>
             {invoice.reference_month ? ` · ${formatMonthYear(invoice.reference_month)}` : ''}
           </div>
           <StatusPill t={t} invoice={invoice} />
@@ -219,16 +222,14 @@ export function InvoiceScreen({
               ) : (
                 <div style={{ fontSize: 13, color: t.text2 }}>Linha digitável indisponível.</div>
               )}
-              {invoice.boleto_pdf_url && (
-                <a
-                  href={invoice.boleto_pdf_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ ...secondaryBtn(t), marginTop: 8 }}
-                >
-                  <Icon name="download" size={15} /> Baixar PDF
-                </a>
-              )}
+              <a
+                href={invoice.boleto_pdf_url ?? `/api/portal/fatura/${invoice.id}/boleto`}
+                target="_blank"
+                rel="noreferrer"
+                style={{ ...secondaryBtn(t), marginTop: 8 }}
+              >
+                <Icon name="download" size={15} /> Baixar boleto em PDF
+              </a>
             </section>
           )}
         </>

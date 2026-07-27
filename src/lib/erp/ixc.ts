@@ -1,4 +1,4 @@
-import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig, ErpConnection, ErpUsagePoint } from './types';
+import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig, ErpConnection, ErpUsagePoint, ErpPix } from './types';
 import { documentVariants } from '@/lib/documento';
 
 // Adapter IXC Soft.
@@ -304,9 +304,11 @@ export class IxcAdapter implements ErpAdapter {
    * É uma estimativa diária sobre um total exato — a central diz isso ao
    * cliente em vez de fingir medição por dia.
    */
-  async getUsage(contractExternalId: string, days = 7): Promise<ErpUsagePoint[]> {
-    const conn = await this.getConnection(contractExternalId);
-    if (!conn?.login) return [];
+  async getUsage(contractExternalId: string, days = 7, login?: string): Promise<ErpUsagePoint[]> {
+    // O login pode vir de fora para não repetir a consulta de conexão.
+    const user = login ?? (await this.getConnection(contractExternalId))?.login;
+    if (!user) return [];
+    const conn = { login: user };
 
     const data = await this.req<IxcListResponse<any>>('radacct', {
       qtype: 'radacct.username', query: conn.login, oper: '=',
@@ -368,6 +370,48 @@ export class IxcAdapter implements ErpAdapter {
     }
 
     return [...buckets.values()];
+  }
+
+  /**
+   * Pix da fatura. O IXC gera na hora pelo endpoint get_pix — o campo
+   * pix_copia_cola do fn_areceber vem vazio nas instalações que usam gateway,
+   * então é aqui que o código realmente aparece.
+   */
+  async getInvoicePix(invoiceExternalId: string): Promise<ErpPix | null> {
+    const data = await this.req<any>('get_pix', { id_areceber: invoiceExternalId });
+    const dados = data?.pix?.dadosPix;
+    const qr = data?.pix?.qrCode;
+    const copyPaste: string | undefined = dados?.pixCopiaECola || qr?.qrcode;
+    if (!copyPaste) return null;
+
+    return {
+      copyPaste,
+      qrImageBase64: qr?.imagemQrcode || undefined,
+      expiresAt: dados?.expiracaoPix || undefined,
+      status: dados?.status || undefined,
+    };
+  }
+
+  /** PDF do boleto, em base64. */
+  async getInvoiceBoletoPdf(invoiceExternalId: string): Promise<string | null> {
+    const url = `${this.baseUrl}/webservice/v1/get_boleto`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: this.auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        boletos: invoiceExternalId,
+        juro: 'N',
+        multa: 'N',
+        atualiza_boleto: 'N',
+        tipo_boleto: 'arquivo',
+        base64: 'S',
+      }),
+      cache: 'no-store',
+    });
+    if (!r.ok) return null;
+    const body = (await r.text()).trim();
+    // A resposta é o PDF já em base64, sem envelope JSON.
+    return body && !body.startsWith('{') ? body : null;
   }
 
   async getInvoice(invoiceExternalId: string): Promise<ErpInvoice | null> {
