@@ -9,7 +9,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Tenant } from '@/lib/supabase/types';
-import { isValidCpf, maskCpf } from '@/lib/utils';
+import { documentKind, isValidDocument, maskDocument, onlyDigits } from '@/lib/documento';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, rgba, type PortalTokens } from '@/components/portal/tokens';
 import { BrandMark } from '@/components/portal/ui';
@@ -30,8 +30,17 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
     e.preventDefault();
     setError(null);
 
-    if (!isValidCpf(cpf)) {
-      setError('CPF inválido. Confira os números e tente de novo.');
+    const digits = onlyDigits(cpf);
+    if (digits.length !== 11 && digits.length !== 14) {
+      setError('Digite os 11 números do CPF (ou 14, se for CNPJ).');
+      return;
+    }
+    if (!isValidDocument(cpf)) {
+      setError(
+        documentKind(cpf) === 'cnpj'
+          ? 'CNPJ inválido. Confira os números e tente de novo.'
+          : 'CPF inválido. Confira os números e tente de novo.',
+      );
       return;
     }
 
@@ -40,7 +49,7 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        cpf: cpf.replace(/\D/g, ''),
+        cpf: digits,
         password: requirePassword ? password : undefined,
         tenant_id: tenant.id,
       }),
@@ -79,12 +88,17 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
             required
             placeholder="000.000.000-00"
             value={cpf}
-            onChange={(e) => setCpf(maskCpf(e.target.value))}
+            /* Pode digitar ou colar com ponto, sem ponto, com espaço — a
+               máscara normaliza e o servidor recebe só os números. */
+            onChange={(e) => setCpf(maskDocument(e.target.value))}
             style={{ ...inputStyle(t), paddingLeft: 42, fontFamily: t.mono, letterSpacing: '0.02em' }}
           />
           <span style={{ position: 'absolute', left: 14, top: 15, color: t.text3 }}>
             <Icon name="user" size={18} />
           </span>
+        </div>
+        <div style={{ fontSize: 11, color: t.text3, marginTop: 6 }}>
+          Empresa? Informe o CNPJ.
         </div>
       </div>
 

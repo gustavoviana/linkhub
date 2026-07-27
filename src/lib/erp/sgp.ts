@@ -1,4 +1,5 @@
 import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig } from './types';
+import { documentVariants } from '@/lib/documento';
 
 // Adapter SGP (sgp.net.br) — Central do Assinante API.
 // Endpoints usados:
@@ -51,8 +52,13 @@ export class SgpAdapter implements ErpAdapter {
   }
 
   async findCustomerByCpf(cpf: string): Promise<ErpCustomer | null> {
-    const data = await this.post('/api/ura/consultacliente/', { cpfcnpj: cpf.replace(/\D/g, '') });
-    const cli = data?.clientes?.[0];
+    // Mesma história do IXC: a instalação pode guardar formatado ou só dígitos.
+    let cli: any = null;
+    for (const variant of documentVariants(cpf)) {
+      const data = await this.post('/api/ura/consultacliente/', { cpfcnpj: variant });
+      cli = data?.clientes?.[0];
+      if (cli) break;
+    }
     if (!cli) return null;
     return {
       externalId: String(cli.id),

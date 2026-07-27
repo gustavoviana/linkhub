@@ -1,4 +1,5 @@
 import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig } from './types';
+import { documentVariants } from '@/lib/documento';
 
 // Adapter Hubsoft. Auth OAuth2 password grant. Token deve ser cacheado —
 // aqui mantemos em memória do processo. Em produção, mover pra Redis ou
@@ -90,9 +91,14 @@ export class HubsoftAdapter implements ErpAdapter {
   }
 
   async findCustomerByCpf(cpf: string): Promise<ErpCustomer | null> {
-    const cpfClean = cpf.replace(/\D/g, '');
-    const data = await this.req<any>(`/api/v1/integracao/cliente?busca=cpf_cnpj&termo_busca=${cpfClean}`);
-    const c = data?.clientes?.[0];
+    let c: any = null;
+    for (const variant of documentVariants(cpf)) {
+      const data = await this.req<any>(
+        `/api/v1/integracao/cliente?busca=cpf_cnpj&termo_busca=${encodeURIComponent(variant)}`,
+      );
+      c = data?.clientes?.[0];
+      if (c) break;
+    }
     if (!c) return null;
     return {
       externalId: String(c.id_cliente),

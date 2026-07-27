@@ -1,4 +1,5 @@
 import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig } from './types';
+import { documentVariants } from '@/lib/documento';
 
 // Adapter IXC Soft.
 // Doc: https://wiki.ixcsoft.com.br/ — endpoint /webservice/v1/<recurso>
@@ -140,12 +141,18 @@ export class IxcAdapter implements ErpAdapter {
   }
 
   async findCustomerByCpf(cpf: string): Promise<ErpCustomer | null> {
-    const cpfClean = cpf.replace(/\D/g, '');
-    const data = await this.req<IxcListResponse<any>>('cliente', {
-      qtype: 'cliente.cnpj_cpf', query: cpfClean, oper: '=',
-      page: '1', rp: '1',
-    });
-    const c = data.registros?.[0];
+    // O IXC guarda cnpj_cpf do jeito que foi digitado no cadastro — na maioria
+    // das instalações, formatado. Buscar só pelos dígitos não encontra
+    // ninguém, então tentamos as duas escritas antes de desistir.
+    let c: any = null;
+    for (const variant of documentVariants(cpf)) {
+      const data = await this.req<IxcListResponse<any>>('cliente', {
+        qtype: 'cliente.cnpj_cpf', query: variant, oper: '=',
+        page: '1', rp: '1',
+      });
+      c = data.registros?.[0];
+      if (c) break;
+    }
     if (!c) return null;
     return {
       externalId: String(c.id),

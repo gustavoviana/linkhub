@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
 import { getAdapterForTenant } from '@/lib/erp';
-import { isValidCpf } from '@/lib/utils';
+import { documentVariants, isValidDocument, onlyDigits } from '@/lib/documento';
 import { clientIp, rateLimit, rateLimitReset } from '@/lib/rate-limit';
 import type { Customer } from '@/lib/supabase/types';
 
@@ -69,11 +69,20 @@ export async function POST(req: NextRequest) {
     return new NextResponse('Campos faltando', { status: 400 });
   }
 
-  // Só CPF: é como as centrais dos provedores identificam o assinante, e é o
-  // número que o cliente sabe de cor.
-  const cpfClean = String(cpf).replace(/\D/g, '');
-  if (cpfClean.length !== 11 || !isValidCpf(cpfClean)) {
-    return new NextResponse('CPF inválido. Confira os números e tente de novo.', { status: 400 });
+  // Aceita como o assinante mandar: com ponto, sem ponto, com espaço. O que
+  // guardamos e comparamos são sempre os dígitos. CNPJ entra junto porque
+  // provedor tem cliente pessoa jurídica, e é o mesmo campo no ERP.
+  const cpfClean = onlyDigits(String(cpf));
+  if (cpfClean.length !== 11 && cpfClean.length !== 14) {
+    return new NextResponse('Digite os 11 números do CPF (ou 14, se for CNPJ).', { status: 400 });
+  }
+  if (!isValidDocument(cpfClean)) {
+    return new NextResponse(
+      cpfClean.length === 14
+        ? 'CNPJ inválido. Confira os números e tente de novo.'
+        : 'CPF inválido. Confira os números e tente de novo.',
+      { status: 400 },
+    );
   }
 
   const ip = clientIp(req.headers);
@@ -106,13 +115,15 @@ export async function POST(req: NextRequest) {
   }
 
   // 1. Já existe no DB?
-  const { data: existing } = await admin
+  // Guardamos só os dígitos, mas cadastros antigos (ou vindos de uma
+  // sincronização) podem estar formatados. Procura as duas escritas.
+  const { data: existingRows } = await admin
     .from('customers')
     .select('*')
     .eq('tenant_id', tenant_id)
-    .eq('cpf_cnpj', cpfClean)
-    .maybeSingle();
-  let customer = existing as Customer | null;
+    .in('cpf_cnpj', documentVariants(cpfClean))
+    .limit(1);
+  let customer = (existingRows?.[0] ?? null) as Customer | null;
 
   // 2. Não → busca no ERP e materializa.
   if (!customer) {
