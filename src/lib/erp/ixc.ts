@@ -1,4 +1,5 @@
-import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig, ErpConnection, ErpUsagePoint, ErpPix } from './types';
+import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig, ErpConnection, ErpUsagePoint, ErpUsageRange, ErpPix } from './types';
+import { usageSlots } from './usage';
 import { documentVariants } from '@/lib/documento';
 
 // Adapter IXC Soft.
@@ -292,44 +293,38 @@ export class IxcAdapter implements ErpAdapter {
   }
 
   /**
-   * Consumo por dia, a partir da contabilidade do RADIUS.
+   * Consumo por período, a partir da contabilidade do RADIUS.
    *
-   * O RADIUS conta por sessão, não por dia, e uma sessão PPPoE pode durar
-   * semanas. Creditar o total no dia em que a sessão começou produz um pico
-   * absurdo num dia e zero nos outros — e sessão sem registro de encerramento
-   * (queda do concentrador) jogaria tudo em cima de hoje. Por isso o consumo
-   * é distribuído proporcionalmente ao tempo que a sessão passou em cada dia,
-   * e o fim da sessão vem de acctsessiontime quando não há acctstoptime.
+   * O RADIUS conta por sessão, não por intervalo, e uma sessão PPPoE pode
+   * durar semanas. Creditar o total no instante em que a sessão começou produz
+   * um pico absurdo num ponto e zero nos outros — e sessão sem registro de
+   * encerramento (queda do concentrador) jogaria tudo em cima de agora. Por
+   * isso o consumo é distribuído proporcionalmente ao tempo que a sessão
+   * passou em cada intervalo, e o fim da sessão vem de acctsessiontime quando
+   * não há acctstoptime.
    *
-   * É uma estimativa diária sobre um total exato — a central diz isso ao
-   * cliente em vez de fingir medição por dia.
+   * É uma estimativa por intervalo sobre um total exato — a central diz isso
+   * ao cliente em vez de fingir medição hora a hora.
    */
-  async getUsage(contractExternalId: string, days = 7, login?: string): Promise<ErpUsagePoint[]> {
+  async getUsage(
+    contractExternalId: string,
+    range: ErpUsageRange = '7d',
+    login?: string,
+  ): Promise<ErpUsagePoint[]> {
     // O login pode vir de fora para não repetir a consulta de conexão.
     const user = login ?? (await this.getConnection(contractExternalId))?.login;
     if (!user) return [];
-    const conn = { login: user };
+
+    const slots = usageSlots(range);
+    if (!slots.length) return [];
 
     const data = await this.req<IxcListResponse<any>>('radacct', {
-      qtype: 'radacct.username', query: conn.login, oper: '=',
+      qtype: 'radacct.username', query: user, oper: '=',
       page: '1', rp: '400',
       sortname: 'radacct.acctstarttime', sortorder: 'desc',
     });
 
-    const dayKey = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const buckets = new Map<string, ErpUsagePoint>();
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
-      buckets.set(dayKey(d), { date: dayKey(d), downloadBytes: 0, uploadBytes: 0 });
-    }
-
-    const windowStart = new Date(today);
-    windowStart.setDate(windowStart.getDate() - (days - 1));
+    const windowStart = slots[0]!.start;
     const now = Date.now();
 
     for (const s of data.registros ?? []) {
@@ -345,31 +340,27 @@ export class IxcAdapter implements ErpAdapter {
         : new Date(Math.min(now, start.getTime() + sessionSeconds * 1000));
 
       const spanMs = Math.max(stop.getTime() - start.getTime(), 1);
-      if (stop.getTime() < windowStart.getTime()) continue;
+      if (stop.getTime() < windowStart) continue;
 
       const down = Number(s.acctoutputoctets ?? 0);
       const up = Number(s.acctinputoctets ?? 0);
       if (!down && !up) continue;
 
-      // Fatia a sessão dia a dia e credita a parte proporcional em cada um.
-      for (const [key, bucket] of buckets) {
-        const [y, m, d] = key.split('-').map(Number);
-        const dayStart = new Date(y!, m! - 1, d!).getTime();
-        const dayEnd = dayStart + 86_400_000;
-        const overlap = Math.min(stop.getTime(), dayEnd) - Math.max(start.getTime(), dayStart);
+      // Fatia a sessão intervalo a intervalo e credita a parte proporcional.
+      for (const slot of slots) {
+        const overlap = Math.min(stop.getTime(), slot.end) - Math.max(start.getTime(), slot.start);
         if (overlap <= 0) continue;
         const share = overlap / spanMs;
-        bucket.downloadBytes += down * share;
-        bucket.uploadBytes += up * share;
+        slot.point.downloadBytes += down * share;
+        slot.point.uploadBytes += up * share;
       }
     }
 
-    for (const bucket of buckets.values()) {
-      bucket.downloadBytes = Math.round(bucket.downloadBytes);
-      bucket.uploadBytes = Math.round(bucket.uploadBytes);
-    }
-
-    return [...buckets.values()];
+    return slots.map((slot) => ({
+      ...slot.point,
+      downloadBytes: Math.round(slot.point.downloadBytes),
+      uploadBytes: Math.round(slot.point.uploadBytes),
+    }));
   }
 
   /**

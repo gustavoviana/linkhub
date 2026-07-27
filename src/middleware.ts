@@ -31,13 +31,28 @@ export async function middleware(req: NextRequest) {
   const host = req.headers.get('host') ?? '';
   const subdomain = extractSubdomain(host);
 
-  // Em dev, permite `?tenant=demo` ou cookie pra simular subdomínio.
-  const devTenant = url.searchParams.get('tenant') ?? req.cookies.get('dev_tenant')?.value;
+  // Em dev, permite `?tenant=demo` ou cookie pra simular subdomínio. Em
+  // produção não: quem manda é o subdomínio, senão daria para abrir a central
+  // de qualquer provedor pelo domínio raiz só mudando a query string.
+  const devTenant =
+    process.env.NODE_ENV === 'production'
+      ? null
+      : (url.searchParams.get('tenant') ?? req.cookies.get('dev_tenant')?.value);
   const tenantSlug = subdomain ?? devTenant ?? null;
 
   // Refresh do session cookie do Supabase em toda requisição (necessário no
   // App Router pra que server components leiam auth atualizado).
   const response = NextResponse.next();
+
+  // Em dev, grava o slug num cookie: assim as chamadas seguintes (o fetch do
+  // gráfico de consumo, por exemplo) acham o provedor sem repetir o
+  // `?tenant=` na URL. Fora de dev o subdomínio é a única fonte — aceitar
+  // query string em produção seria trocar de provedor pela barra de endereço.
+  const devParam = url.searchParams.get('tenant');
+  if (devParam && process.env.NODE_ENV !== 'production') {
+    response.cookies.set('dev_tenant', devParam, { path: '/', sameSite: 'lax' });
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,

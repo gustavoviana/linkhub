@@ -1,4 +1,5 @@
-import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConnection, ErpUsagePoint, ErpPix } from './types';
+import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConnection, ErpUsagePoint, ErpUsageRange, ErpPix } from './types';
+import { usageSlots } from './usage';
 
 // Adapter de teste — usado pelo tenant 'demo' e quando nenhum ERP foi
 // configurado ainda. Dados determinísticos pelo CPF pra facilitar QA.
@@ -77,21 +78,19 @@ export class MockAdapter implements ErpAdapter {
     };
   }
 
-  async getUsage(_contractExternalId: string, days = 7): Promise<ErpUsagePoint[]> {
-    const out: ErpUsagePoint[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today);
-      d.setDate(d.getDate() - i);
+  async getUsage(_contractExternalId: string, range: ErpUsageRange = '7d'): Promise<ErpUsagePoint[]> {
+    const slots = usageSlots(range);
+    // Hora rende bem menos que dia — a onda acompanha para o gráfico do
+    // período "hoje" não sair na mesma escala do de 30 dias.
+    const scale = range === 'today' ? 260_000_000 : 5_600_000_000;
+    return slots.map((slot, i) => {
       const wave = 1 + Math.sin(i * 1.1) * 0.45;
-      out.push({
-        date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
-        downloadBytes: Math.round(5_600_000_000 * wave),
-        uploadBytes: Math.round(420_000_000 * wave),
-      });
-    }
-    return out;
+      return {
+        ...slot.point,
+        downloadBytes: Math.round(scale * wave),
+        uploadBytes: Math.round(scale * 0.075 * wave),
+      };
+    });
   }
 
   async listInvoicesByContract(contractExternalId: string, opts?: { onlyOpen?: boolean }): Promise<ErpInvoice[]> {

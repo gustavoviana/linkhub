@@ -66,10 +66,15 @@ export interface ErpConnection {
   disconnectReason?: string;
 }
 
-/** Um dia de consumo, para o gráfico da central. */
+/** Períodos do gráfico de consumo, como no seletor da central. */
+export type ErpUsageRange = 'today' | '7d' | '30d';
+
+/** Um intervalo de consumo (uma hora ou um dia), para o gráfico da central. */
 export interface ErpUsagePoint {
-  /** YYYY-MM-DD */
+  /** YYYY-MM-DD nos períodos por dia, YYYY-MM-DDTHH no período de hoje. */
   date: string;
+  /** Rótulo pronto para o eixo: "26/07" ou "14h". */
+  label?: string;
   downloadBytes: number;
   uploadBytes: number;
 }
@@ -105,7 +110,7 @@ export interface ErpAdapter {
 
   /** Opcionais: nem todo ERP expõe. A central esconde o bloco quando faltam. */
   getConnection?(contractExternalId: string): Promise<ErpConnection | null>;
-  getUsage?(contractExternalId: string, days?: number, login?: string): Promise<ErpUsagePoint[]>;
+  getUsage?(contractExternalId: string, range?: ErpUsageRange, login?: string): Promise<ErpUsagePoint[]>;
   /** Pix é gerado na hora pelo ERP — não faz sentido guardar cópia velha. */
   getInvoicePix?(invoiceExternalId: string): Promise<ErpPix | null>;
   /** PDF do boleto em base64, quando o ERP sabe emitir. */

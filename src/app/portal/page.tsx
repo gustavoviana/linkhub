@@ -223,7 +223,9 @@ export default async function PortalHome() {
     try {
       // Reaproveita o login que já veio da conexão — sem isso o adapter
       // consultaria o ERP de novo só para descobrir o mesmo usuário.
-      usage = (await adapter.getUsage?.(contract.external_id, 7, connection?.login)) ?? [];
+      // Só o período padrão vem no HTML; "hoje" e "30 dias" são buscados
+      // pelo gráfico quando o assinante troca, em /api/portal/consumo.
+      usage = (await adapter.getUsage?.(contract.external_id, '7d', connection?.login)) ?? [];
     } catch (e) {
       console.error('[portal] usage lookup failed', e);
     }
