@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { NavLink as Link } from './nav-link';
 import { usePathname } from 'next/navigation';
 import type { Tenant, Customer, Contract, Plan, Invoice } from '@/lib/supabase/types';
 import { Icon, type IconName } from './icons';

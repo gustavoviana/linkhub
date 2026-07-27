@@ -3,7 +3,7 @@
 // Layout V2 — Neo Premium. Portado de docs/prototipo/src/v2.jsx: vidro,
 // gradiente da marca, densidade maior e hierarquia por contraste.
 
-import Link from 'next/link';
+import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';

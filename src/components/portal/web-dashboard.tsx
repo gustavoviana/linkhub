@@ -4,7 +4,7 @@
 // protótipo (docs/prototipo/src/web.jsx): KPIs no topo, gráfico + coluna de
 // pagamento no meio, cartões de conexão, atendimento e plano embaixo.
 
-import Link from 'next/link';
+import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';

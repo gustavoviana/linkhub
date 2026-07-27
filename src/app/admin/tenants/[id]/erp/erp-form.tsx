@@ -121,8 +121,11 @@ export default function ErpForm({ tenant, masked }: { tenant: Tenant; masked: Ma
                   />
                 </Field>
                 <Field
-                  label="Token (Base64 de usuário:apiKey)"
-                  hint={secretHint('token') ?? 'Gere no IXC em Configurações → Integrações → Webservice'}
+                  label="Token do webservice"
+                  hint={
+                    secretHint('token') ??
+                    'Cole o Base64 de "usuário:chave" ou simplesmente usuário:chave — nós codificamos. Gere no IXC em Configurações → Integrações → Webservice.'
+                  }
                 >
                   <Input
                     type="password"
@@ -206,7 +209,12 @@ export default function ErpForm({ tenant, masked }: { tenant: Tenant; masked: Ma
                 Testar conexão
               </Button>
               {testResult && (
-                <span className={cn('text-sm', testResult.ok ? 'text-success' : 'text-danger')}>
+                <span
+                  className={cn(
+                    'text-sm leading-relaxed',
+                    testResult.ok ? 'text-success' : 'text-danger',
+                  )}
+                >
                   {testResult.ok ? '✓ Conexão OK' : `✗ ${testResult.message}`}
                 </span>
               )}

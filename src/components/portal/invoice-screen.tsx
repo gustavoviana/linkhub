@@ -5,7 +5,7 @@
 // bloco do Pix, boleto e detalhes. O que muda por layout é a moldura.
 
 import { useState } from 'react';
-import Link from 'next/link';
+import { NavLink as Link } from './nav-link';
 import type { Tenant, Invoice, Plan } from '@/lib/supabase/types';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon } from './icons';

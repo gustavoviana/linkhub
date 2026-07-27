@@ -3,7 +3,7 @@
 // Layout V1 — Clean Minimal. Portado de docs/prototipo/src/v1.jsx:
 // hierarquia tipográfica, muito respiro, cards de borda fina sem sombra.
 
-import Link from 'next/link';
+import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon } from './icons';
 import { portalTokens } from './tokens';

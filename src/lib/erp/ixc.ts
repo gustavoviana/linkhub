@@ -19,15 +19,83 @@ interface IxcListResponse<T> {
   registros: T[];
 }
 
+/** Aceita `https://host`, `host` ou `https://host/webservice/v1` e normaliza. */
+function normalizeBaseUrl(raw: string): string {
+  let url = (raw ?? '').trim();
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  // O provedor costuma colar a URL já com o caminho do webservice.
+  url = url.replace(/\/+$/, '').replace(/\/webservice(\/v1)?$/i, '');
+  return url;
+}
+
+/**
+ * O IXC autentica com Basic Base64("usuario:apiKey"). O erro mais comum é
+ * colar a apiKey crua, ou o par `usuario:apiKey` sem codificar — nos dois
+ * casos o nginx devolve 401 antes de chegar no IXC. Aceitamos as três formas
+ * e normalizamos para o que o servidor espera.
+ */
+function normalizeToken(raw: string): string {
+  const token = (raw ?? '').trim().replace(/\s+/g, '');
+  if (!token) return '';
+
+  // Já é Base64 de algo com ":"? Então está no formato certo.
+  try {
+    const decoded = Buffer.from(token, 'base64').toString('utf8');
+    if (decoded.includes(':') && /^[\x20-\x7e]+$/.test(decoded)) return token;
+  } catch {
+    // segue para as heurísticas abaixo
+  }
+
+  // Veio como "usuario:apiKey" em texto puro — codifica.
+  if (token.includes(':')) return Buffer.from(token, 'utf8').toString('base64');
+
+  // Veio só a apiKey. Não dá pra adivinhar o usuário; manda como está para o
+  // servidor decidir, e a mensagem de erro orienta o provedor.
+  return token;
+}
+
+/** Traduz o erro do IXC para algo acionável — e sem HTML cru na tela. */
+function explainIxcError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+
+  if (/\b401\b/.test(raw)) {
+    return (
+      'O IXC recusou a credencial (401). Confira, nesta ordem: ' +
+      '1) o token precisa ser o Base64 de "usuario:chave" — se você tem os dois separados, ' +
+      'pode colar no formato usuario:chave que o LinkHub codifica; ' +
+      '2) no IXC, em Configurações → Integrações → Webservice, confirme se o usuário da API está ativo; ' +
+      '3) se houver restrição de IP no webservice, o IP do servidor precisa estar liberado.'
+    );
+  }
+  if (/\b403\b/.test(raw)) {
+    return 'O IXC aceitou a credencial mas bloqueou o acesso (403). Normalmente é restrição de IP ou permissão do usuário da API.';
+  }
+  if (/\b404\b/.test(raw)) {
+    return 'Endereço não encontrado (404). Confira a Base URL — deve ser o host da central, sem /webservice no final.';
+  }
+  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(raw)) {
+    return 'Não encontramos esse endereço. Confira o domínio da central do IXC.';
+  }
+  if (/ECONNREFUSED|ETIMEDOUT|timeout|fetch failed/i.test(raw)) {
+    return 'Não conseguimos conectar no servidor do IXC. Ele pode estar fora do ar ou bloqueando conexões externas.';
+  }
+  if (/certificate|SSL|TLS/i.test(raw)) {
+    return 'O certificado HTTPS da central do IXC não foi aceito. Confira se ele está válido.';
+  }
+
+  // Resposta em HTML (página de erro do nginx) vira texto legível.
+  const stripped = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  return stripped.length > 220 ? `${stripped.slice(0, 220)}…` : stripped;
+}
+
 export class IxcAdapter implements ErpAdapter {
   name = 'ixc';
   private baseUrl: string;
   private auth: string;
 
   constructor(cfg: NonNullable<ErpConfig['ixc']>) {
-    this.baseUrl = cfg.baseUrl.replace(/\/+$/, '');
-    // O IXC já espera o token como Base64(user:apiKey) — passamos direto.
-    this.auth = `Basic ${cfg.token}`;
+    this.baseUrl = normalizeBaseUrl(cfg.baseUrl);
+    this.auth = `Basic ${normalizeToken(cfg.token)}`;
   }
 
   private async req<T = unknown>(resource: string, body: Record<string, unknown>): Promise<T> {
@@ -50,8 +118,8 @@ export class IxcAdapter implements ErpAdapter {
     try {
       await this.req('cliente', { qtype: 'cliente.id', query: '0', oper: '=', page: '1', rp: '1' });
       return { ok: true };
-    } catch (e: any) {
-      return { ok: false, message: e?.message ?? String(e) };
+    } catch (e: unknown) {
+      return { ok: false, message: explainIxcError(e) };
     }
   }
 

@@ -5,6 +5,7 @@ import type { Tenant, TenantLayout } from '@/lib/supabase/types';
 import type { PreviewData } from '@/lib/tenant/preview-data';
 import { tenantCssText } from '@/lib/tenant/theme';
 import { portalTokens } from '@/components/portal/tokens';
+import { PreviewContext } from '@/components/portal/nav-link';
 import { TabBar } from '@/components/portal/ui';
 import { HomeV1 } from '@/components/portal/home-v1';
 import { HomeV2 } from '@/components/portal/home-v2';
@@ -39,7 +40,7 @@ export function PreviewShell({ tenant, data }: { tenant: Tenant; data: PreviewDa
   const Layout = pickLayout(merged.layout);
 
   return (
-    <>
+    <PreviewContext.Provider value>
       <style>{`
         :root{${tenantCssText(merged, dark)}}
         /* Levanta a barra de navegação acima do indicador de home do iPhone. */
@@ -66,7 +67,7 @@ export function PreviewShell({ tenant, data }: { tenant: Tenant; data: PreviewDa
           </main>
         )}
       </div>
-    </>
+    </PreviewContext.Provider>
   );
 }
 

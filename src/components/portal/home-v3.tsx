@@ -4,7 +4,7 @@
 // colorido com base arredondada, card de fatura flutuando por cima dele,
 // tiles grandes 2×2 e cards de histórico encorpados.
 
-import Link from 'next/link';
+import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
