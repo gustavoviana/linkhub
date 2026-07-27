@@ -70,6 +70,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
               <NavGroup>Conta</NavGroup>
               <NavItem href={`/admin/tenants/${current.id}/team`} icon="shield">Equipe &amp; acessos</NavItem>
+              <NavItem href={`/admin/tenants/${current.id}/configuracoes`} icon="settings">Configurações</NavItem>
             </>
           )}
         </nav>

@@ -19,6 +19,8 @@ export interface Tenant {
   primary_color: string;
   accent_color: string;
   dark_mode_default: boolean;
+  /** Central exige senha além do CPF. Ausente = só CPF. */
+  portal_require_password?: boolean;
   logo_url: string | null;
   favicon_url: string | null;
   support_phone: string | null;

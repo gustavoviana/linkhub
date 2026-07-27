@@ -63,6 +63,8 @@ create table tenants (
   primary_color text not null default '#6d4ae0',
   accent_color text not null default '#0aa5c0',
   dark_mode_default boolean not null default false,
+  -- Central exige senha além do CPF? Padrão do mercado é só CPF.
+  portal_require_password boolean not null default false,
   logo_url text,
   favicon_url text,
   support_phone text,

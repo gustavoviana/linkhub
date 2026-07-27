@@ -30,6 +30,7 @@ export default async function TenantLayout({
     { href: `/admin/tenants/${id}/customers`, label: 'Clientes' },
     { href: `/admin/tenants/${id}/plans`, label: 'Planos' },
     { href: `/admin/tenants/${id}/team`, label: 'Equipe' },
+    { href: `/admin/tenants/${id}/configuracoes`, label: 'Configurações' },
   ];
 
   const portalUrl = tenant.custom_domain

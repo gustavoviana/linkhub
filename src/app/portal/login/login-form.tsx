@@ -17,6 +17,9 @@ import { BrandMark } from '@/components/portal/ui';
 export default function LoginForm({ tenant }: { tenant: Tenant }) {
   const router = useRouter();
   const t = portalTokens(tenant, tenant.dark_mode_default);
+  // Padrão das centrais brasileiras: entra só com o CPF. O provedor liga a
+  // senha em Configurações quando o ERP dele exige.
+  const requirePassword = tenant.portal_require_password === true;
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +39,11 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
     const r = await fetch('/api/portal/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cpf: cpf.replace(/\D/g, ''), password, tenant_id: tenant.id }),
+      body: JSON.stringify({
+        cpf: cpf.replace(/\D/g, ''),
+        password: requirePassword ? password : undefined,
+        tenant_id: tenant.id,
+      }),
     }).catch(() => null);
     setLoading(false);
 
@@ -81,41 +88,43 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
         </div>
       </div>
 
-      <div>
-        <label htmlFor="senha" style={labelStyle(t)}>Senha</label>
-        <div style={{ position: 'relative' }}>
-          <input
-            id="senha"
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ ...inputStyle(t), paddingLeft: 42, paddingRight: 44 }}
-          />
-          <span style={{ position: 'absolute', left: 14, top: 15, color: t.text3 }}>
-            <Icon name="lock" size={18} />
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-            style={{
-              position: 'absolute',
-              right: 12,
-              top: 12,
-              background: 'transparent',
-              border: 'none',
-              color: t.text3,
-              cursor: 'pointer',
-              padding: 4,
-              display: 'flex',
-            }}
-          >
-            <Icon name="eye" size={18} />
-          </button>
+      {requirePassword && (
+        <div>
+          <label htmlFor="senha" style={labelStyle(t)}>Senha</label>
+          <div style={{ position: 'relative' }}>
+            <input
+              id="senha"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ ...inputStyle(t), paddingLeft: 42, paddingRight: 44 }}
+            />
+            <span style={{ position: 'absolute', left: 14, top: 15, color: t.text3 }}>
+              <Icon name="lock" size={18} />
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+              style={{
+                position: 'absolute',
+                right: 12,
+                top: 12,
+                background: 'transparent',
+                border: 'none',
+                color: t.text3,
+                cursor: 'pointer',
+                padding: 4,
+                display: 'flex',
+              }}
+            >
+              <Icon name="eye" size={18} />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {error && (
         <div
@@ -161,7 +170,7 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
 
       {/* O acesso do cliente é por CPF, sem e-mail próprio no Auth — quem
           redefine a senha é o provedor, pelo canal de atendimento. */}
-      {help && (
+      {requirePassword && help && (
         <a
           href={help}
           target="_blank"
@@ -210,7 +219,9 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
         <form onSubmit={onSubmit} style={{ padding: '28px 24px 40px', maxWidth: 460, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.01em', margin: '0 0 4px' }}>Entrar</h1>
-            <p style={{ fontSize: 13, color: t.text2, margin: 0 }}>Acesse com seu CPF e senha cadastrados.</p>
+            <p style={{ fontSize: 13, color: t.text2, margin: 0 }}>
+              {requirePassword ? 'Acesse com seu CPF e senha cadastrados.' : 'É só informar o seu CPF.'}
+            </p>
           </div>
           {fields}
           <Footer t={t} tenant={tenant} />
@@ -280,7 +291,9 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
         <BrandMark tenant={tenant} t={t} size={56} showName={false} />
         <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', margin: '28px 0 6px' }}>Bem-vindo</h1>
         <p style={{ fontSize: 15, color: t.text2, margin: 0, lineHeight: 1.5 }}>
-          Acesse sua central do cliente para ver faturas, pagar por Pix e falar com o suporte.
+          {requirePassword
+            ? 'Acesse sua central do cliente para ver faturas, pagar por Pix e falar com o suporte.'
+            : 'Informe seu CPF para ver faturas, pagar por Pix e falar com o suporte.'}
         </p>
         <form onSubmit={onSubmit} style={{ marginTop: 36, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {fields}

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import crypto from 'node:crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
@@ -9,21 +10,62 @@ import type { Customer } from '@/lib/supabase/types';
 
 // Fluxo de login do cliente final:
 //
-// 1. Cliente entra com CPF + senha.
+// 1. Cliente entra com o CPF. Senha só é pedida se o provedor exigir
+//    (tenants.portal_require_password) — o padrão das centrais brasileiras é
+//    identificar o assinante apenas pelo CPF.
 // 2. Buscamos o customer no DB (por tenant + CPF). Se não existe:
 //    a. Buscamos no ERP. Se também não, 404.
 //    b. Criamos o customer com os dados do ERP.
-// 3. Se customer.user_id existe → tenta auth.signInWithPassword com o
-//    e-mail vinculado.
-// 4. Se customer.user_id é null → cria o user no Supabase (admin) na 1ª vez,
-//    salva user_id no customer e loga.
+// 3. A identidade no Auth é derivada do CPF, nunca do e-mail do cadastro.
+// 4. Com senha: signInWithPassword. Sem senha: sessão emitida pelo servidor
+//    via link mágico gerado pela service key — o navegador nunca recebe um
+//    segredo reutilizável.
 //
-// Sintético: quando o ERP não tem e-mail, geramos um endereço estável
-// `cliente-<slug>-<cpf>@linkhub.local` (não verificado, só pra Auth).
+// Sintético: o e-mail no Auth é `cliente-<slug>-<cpf>@linkhub.local`, nunca
+// enviado para ninguém; serve só como identificador único.
+
+type ServerClient = Awaited<ReturnType<typeof createClient>>;
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+/**
+ * Emite a sessão sem senha. O token do link mágico é gerado com a service
+ * key e consumido aqui mesmo, no servidor — nunca chega ao navegador nem é
+ * enviado por e-mail. O cliente sai com o cookie de sessão normal.
+ */
+async function signInWithoutPassword(
+  sb: ServerClient,
+  admin: AdminClient,
+  email: string,
+): Promise<string | null> {
+  const { data: link, error: linkErr } = await admin.auth.admin.generateLink({
+    type: 'magiclink',
+    email,
+  });
+  const tokenHash = link?.properties?.hashed_token;
+
+  if (!linkErr && tokenHash) {
+    const { error } = await sb.auth.verifyOtp({ token_hash: tokenHash, type: 'email' });
+    if (!error) return null;
+  }
+
+  // Plano B: rotaciona a senha para um valor aleatório e entra com ele. O
+  // valor morre nesta função. Cobre projetos onde o link mágico está
+  // desabilitado nas configurações de Auth.
+  const temporary = crypto.randomBytes(24).toString('base64url');
+  const { data: found } = await admin.auth.admin.generateLink({ type: 'recovery', email });
+  const userId = found?.user?.id;
+  if (!userId) return 'Não foi possível iniciar a sessão.';
+
+  const { error: updErr } = await admin.auth.admin.updateUserById(userId, { password: temporary });
+  if (updErr) return updErr.message;
+
+  const { error: signErr } = await sb.auth.signInWithPassword({ email, password: temporary });
+  return signErr ? signErr.message : null;
+}
 
 export async function POST(req: NextRequest) {
   const { cpf, password, tenant_id } = await req.json();
-  if (!cpf || !password || !tenant_id) {
+  if (!cpf || !tenant_id) {
     return new NextResponse('Campos faltando', { status: 400 });
   }
 
@@ -34,14 +76,20 @@ export async function POST(req: NextRequest) {
     return new NextResponse('CPF inválido. Confira os números e tente de novo.', { status: 400 });
   }
 
-  // O CPF é público; a senha é o único segredo. Sem freio, dá para varrer
-  // senha de um assinante à vontade.
-  const limitKey = `portal-login:${tenant_id}:${cpfClean}:${clientIp(req.headers)}`;
+  const ip = clientIp(req.headers);
+
+  // Dois freios. O primeiro é por assinante: sem ele dá para varrer senha de
+  // um CPF à vontade. O segundo é por origem: no modo só-CPF o ataque não é
+  // adivinhar senha, é varrer CPFs — e esse teto é o que corta isso.
+  const limitKey = `portal-login:${tenant_id}:${cpfClean}:${ip}`;
   const limit = rateLimit(limitKey, 8, 5 * 60_000);
-  if (!limit.allowed) {
+  const scanKey = `portal-scan:${tenant_id}:${ip}`;
+  const scan = rateLimit(scanKey, 30, 10 * 60_000);
+  if (!limit.allowed || !scan.allowed) {
+    const wait = Math.max(limit.retryAfterSeconds, scan.retryAfterSeconds);
     return new NextResponse(
-      `Muitas tentativas. Espere ${Math.ceil(limit.retryAfterSeconds / 60)} minuto(s) e tente de novo.`,
-      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+      `Muitas tentativas. Espere ${Math.ceil(wait / 60)} minuto(s) e tente de novo.`,
+      { status: 429, headers: { 'Retry-After': String(wait) } },
     );
   }
 
@@ -50,6 +98,12 @@ export async function POST(req: NextRequest) {
   const { data: tenantData } = await admin.from('tenants').select('*').eq('id', tenant_id).single();
   const tenant = asTenantOrNull(tenantData);
   if (!tenant) return new NextResponse('Provedor não encontrado', { status: 404 });
+
+  // Coluna ausente (banco ainda sem a migração 005) cai no padrão: só CPF.
+  const requirePassword = tenant.portal_require_password === true;
+  if (requirePassword && !password) {
+    return new NextResponse('Informe sua senha para entrar.', { status: 400 });
+  }
 
   // 1. Já existe no DB?
   const { data: existing } = await admin
@@ -104,10 +158,11 @@ export async function POST(req: NextRequest) {
   const sb = await createClient();
 
   if (!customer.user_id) {
-    // Primeiro acesso: cria usuário Supabase com a senha fornecida.
+    // Primeiro acesso: cria o usuário no Supabase. No modo só-CPF a senha é
+    // aleatória e descartada — ninguém precisa dela, o acesso é pelo CPF.
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: authEmail,
-      password,
+      password: requirePassword ? password : crypto.randomBytes(24).toString('base64url'),
       email_confirm: true,
       user_metadata: { tenant_id, customer_id: customer.id, cpf: cpfClean },
     });
@@ -123,15 +178,25 @@ export async function POST(req: NextRequest) {
     if (linked?.user?.email) authEmail = linked.user.email;
   }
 
-  // 4. Login.
-  const { error: loginErr } = await sb.auth.signInWithPassword({
-    email: authEmail,
-    password,
-  });
-  if (loginErr) {
-    return new NextResponse('CPF ou senha incorretos', { status: 401 });
+  // 4. Sessão.
+  if (requirePassword) {
+    const { error: loginErr } = await sb.auth.signInWithPassword({ email: authEmail, password });
+    if (loginErr) return new NextResponse('CPF ou senha incorretos', { status: 401 });
+  } else {
+    const err = await signInWithoutPassword(sb, admin, authEmail);
+    if (err) return new NextResponse(err, { status: 500 });
   }
 
   rateLimitReset(limitKey);
+
+  await admin.from('audit_log').insert({
+    tenant_id,
+    actor_user_id: customer.user_id,
+    action: 'portal.login',
+    resource_type: 'customer',
+    resource_id: customer.id,
+    metadata: { mode: requirePassword ? 'cpf_senha' : 'cpf', ip },
+  } as never);
+
   return NextResponse.json({ ok: true });
 }
