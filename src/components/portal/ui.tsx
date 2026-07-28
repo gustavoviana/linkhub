@@ -136,6 +136,36 @@ const TABS: { href: string; label: string; icon: IconName; match: (p: string) =>
 ];
 
 /**
+ * Material de vidro da barra de navegação, no espírito do iOS.
+ *
+ * Três detalhes fazem parecer vidro em vez de um fosco qualquer:
+ * a saturação alta, que deixa a cor do que está atrás vazar; o fio de luz na
+ * borda de cima, que simula a quina do painel pegando luz; e, no escuro, um
+ * ganho de brilho — sem ele um fundo translúcido escuro sobre conteúdo escuro
+ * vira só uma mancha.
+ *
+ * O fundo vem de `surfaceSolid` com alfa próprio: `t.surface` é opaco no V1 e
+ * no V3, e com fundo opaco o `backdrop-filter` não tem o que desfocar.
+ */
+function glassBar(t: PortalTokens) {
+  return {
+    background: rgba(t.surfaceSolid, t.dark ? 0.62 : 0.7),
+    // Lido pelo @supports em globals.css quando o navegador não desfoca.
+    ['--glass-solid' as string]: t.surfaceSolid,
+    backdropFilter: t.dark
+      ? 'blur(24px) saturate(180%) brightness(1.25)'
+      : 'blur(24px) saturate(180%)',
+    WebkitBackdropFilter: t.dark
+      ? 'blur(24px) saturate(180%) brightness(1.25)'
+      : 'blur(24px) saturate(180%)',
+    border: `1px solid ${rgba(t.text, t.dark ? 0.12 : 0.08)}`,
+    boxShadow: t.dark
+      ? '0 14px 34px -10px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.09)'
+      : '0 14px 34px -14px rgba(15,16,27,0.28), inset 0 1px 0 rgba(255,255,255,0.85)',
+  } as const;
+}
+
+/**
  * Barra inferior — cada layout tem a sua no protótipo: V1 cápsula flutuante
  * com rótulos, V2 pílula compacta só de ícones, V3 barra larga com pílulas
  * coloridas.
@@ -146,20 +176,17 @@ export function TabBar({ t }: { t: PortalTokens }) {
   if (t.layout === 'v2') {
     return (
       <nav
+        className="portal-glass"
         style={{
           position: 'fixed',
           bottom: 20,
           left: '50%',
           transform: 'translateX(-50%)',
           padding: '8px 6px',
-          background: t.surface,
-          backdropFilter: 'blur(20px) saturate(160%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-          border: `1px solid ${t.border}`,
+          ...glassBar(t),
           borderRadius: 28,
           display: 'flex',
           gap: 4,
-          boxShadow: '0 16px 40px -8px rgba(0,0,0,0.4)',
           zIndex: 30,
         }}
       >
@@ -194,18 +221,17 @@ export function TabBar({ t }: { t: PortalTokens }) {
   if (t.layout === 'v3') {
     return (
       <nav
+        className="portal-glass"
         style={{
           position: 'fixed',
           bottom: 14,
           left: 14,
           right: 14,
           padding: 6,
-          background: t.surface,
+          ...glassBar(t),
           borderRadius: 24,
           display: 'flex',
           justifyContent: 'space-around',
-          boxShadow: `0 -4px 20px ${rgba(t.accent, 0.14)}`,
-          border: `1px solid ${t.border}`,
           zIndex: 30,
           maxWidth: 520,
           marginInline: 'auto',
@@ -241,19 +267,17 @@ export function TabBar({ t }: { t: PortalTokens }) {
 
   return (
     <nav
+      className="portal-glass"
       style={{
         position: 'fixed',
         bottom: 18,
         left: 14,
         right: 14,
         padding: '8px 6px',
-        background: t.surface,
-        border: `1px solid ${t.border}`,
+        ...glassBar(t),
         borderRadius: 22,
         display: 'flex',
         justifyContent: 'space-around',
-        boxShadow: t.dark ? '0 -4px 18px rgba(0,0,0,0.5)' : '0 -4px 16px rgba(15,16,27,0.06)',
-        backdropFilter: 'blur(20px)',
         zIndex: 30,
         maxWidth: 520,
         marginInline: 'auto',

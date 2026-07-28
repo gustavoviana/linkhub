@@ -60,3 +60,13 @@ button {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Barra de navegação da central. O vidro é aplicado inline (as cores mudam
+   por layout e por tema); aqui fica só a rede de segurança: sem suporte a
+   backdrop-filter, o fundo translúcido deixaria o conteúdo de trás vazando
+   por baixo dos rótulos, então ele vira sólido. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .portal-glass {
+    background: var(--glass-solid) !important;
+  }
+}
