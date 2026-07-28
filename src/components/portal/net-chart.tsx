@@ -607,7 +607,21 @@ function ChartBars({
           const ul = series.upload[i] ?? 0;
           const isPeak = i === peakIndex;
           return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+            // height:100% dá altura definida à coluna. Sem isso a barra, que
+            // é medida em porcentagem, não tinha contra o que calcular e
+            // colapsava no minHeight — o gráfico de barras saía vazio.
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-end',
+                alignItems: 'center',
+                gap: 1,
+              }}
+            >
               <div
                 style={{
                   width: '100%',

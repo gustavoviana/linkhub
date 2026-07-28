@@ -5,6 +5,7 @@ import type { Tenant, Customer, Contract, Plan } from '@/lib/supabase/types';
 import { formatBRL, maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, type PortalTokens } from '@/components/portal/tokens';
+import { usePortalTokens } from '@/components/portal/theme';
 import { ScreenHeader } from '@/components/portal/shell';
 import { initials } from '@/components/portal/ui';
 
@@ -19,7 +20,7 @@ export function AccountScreen({
   contract: Contract | null;
   plan: Plan | null;
 }) {
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
 
   const address = [
     customer.address_street && `${customer.address_street}, ${customer.address_number ?? 's/n'}`,

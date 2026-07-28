@@ -7,13 +7,14 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon } from './icons';
 import { portalTokens } from './tokens';
+import { ThemeToggle, usePortalTokens } from './theme';
 import { BrandMark, PortalScreenProps, initials, invoiceStanding } from './ui';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
 
 export function HomeV1(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
@@ -21,23 +22,26 @@ export function HomeV1(props: PortalScreenProps) {
       <div style={{ maxWidth: 520, margin: '0 auto' }}>
         <div style={{ padding: '16px 24px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <BrandMark tenant={tenant} t={t} size={30} />
-          <Link
-            href="/conta"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: '50%',
-              background: t.accentSoft,
-              color: t.accent,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 14,
-              fontWeight: 700,
-            }}
-          >
-            {initials(customer.name)}
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ThemeToggle t={t} style={{ borderRadius: '50%' }} />
+            <Link
+              href="/conta"
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: t.accentSoft,
+                color: t.accent,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              {initials(customer.name)}
+            </Link>
+          </div>
         </div>
 
         <div style={{ padding: '18px 24px 0' }}>

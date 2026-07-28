@@ -10,6 +10,7 @@ import type { Tenant, Invoice, Plan } from '@/lib/supabase/types';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
+import { usePortalTokens } from './theme';
 import { PixQr } from './ui';
 
 type Method = 'pix' | 'boleto';
@@ -23,7 +24,7 @@ export function InvoiceScreen({
   invoice: Invoice;
   plan: Plan | null;
 }) {
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
   const paid = invoice.status === 'paid';
   const [method, setMethod] = useState<Method>(invoice.pix_copy_paste ? 'pix' : 'boleto');
 

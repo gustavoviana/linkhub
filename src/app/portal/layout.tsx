@@ -1,26 +1,22 @@
+import { cookies } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getCurrentTenant } from '@/lib/tenant/resolve';
-import { tenantCssText } from '@/lib/tenant/theme';
+import { PortalThemeProvider } from '@/components/portal/theme';
+import { PORTAL_THEME_COOKIE, resolveDark } from '@/lib/portal/theme-cookie';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getCurrentTenant();
   if (!tenant) notFound();
 
-  const dark = tenant.dark_mode_default;
+  // O tema vem do cookie já no servidor: assim a primeira pintura sai certa,
+  // sem o flash de claro→escuro que uma leitura de localStorage causaria.
+  const store = await cookies();
+  const dark = resolveDark(store.get(PORTAL_THEME_COOKIE)?.value, tenant);
 
   return (
-    <>
-      {/* Em `:root` e não na div: o `body` também lê essas variáveis, então o
-          fundo do provedor cobre a tela inteira, inclusive no overscroll. */}
-      <style>{`:root{${tenantCssText(tenant, dark)}}`}</style>
-      <div
-        data-theme={dark ? 'dark' : 'light'}
-        data-layout={tenant.layout}
-        className="min-h-screen bg-bg text-fg"
-      >
-        {children}
-      </div>
-    </>
+    <PortalThemeProvider tenant={tenant} initialDark={dark}>
+      {children}
+    </PortalThemeProvider>
   );
 }
 

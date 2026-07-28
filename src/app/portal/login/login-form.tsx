@@ -12,11 +12,12 @@ import type { Tenant } from '@/lib/supabase/types';
 import { documentKind, isValidDocument, maskDocument, onlyDigits } from '@/lib/documento';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, rgba, type PortalTokens } from '@/components/portal/tokens';
+import { ThemeToggle, usePortalTokens } from '@/components/portal/theme';
 import { BrandMark } from '@/components/portal/ui';
 
 export default function LoginForm({ tenant }: { tenant: Tenant }) {
   const router = useRouter();
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
   // Padrão das centrais brasileiras: entra só com o CPF. O provedor liga a
   // senha em Configurações quando o ERP dele exige.
   const requirePassword = tenant.portal_require_password === true;
@@ -197,10 +198,19 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
     </>
   );
 
+  // Na entrada o botão flutua no canto: os três layouts têm topos bem
+  // diferentes e nenhum deles tem barra onde encaixá-lo.
+  const themeToggle = (
+    <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 10 }}>
+      <ThemeToggle t={t} onAccent={t.layout === 'v3'} />
+    </div>
+  );
+
   // ── V3: cabeçalho ilustrado grande, formulário embaixo ────────────────
   if (t.layout === 'v3') {
     return (
       <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', flexDirection: 'column' }}>
+        {themeToggle}
         <div
           style={{
             background: t.accentGrad,
@@ -257,6 +267,7 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
           overflow: 'hidden',
         }}
       >
+        {themeToggle}
         <div
           style={{
             position: 'absolute',
@@ -301,6 +312,7 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
   // ── V1: limpo, sem caixa, foco na tipografia ──────────────────────────
   return (
     <div style={{ minHeight: '100vh', background: t.bg, color: t.text, padding: '60px 28px 40px' }}>
+      {themeToggle}
       <div style={{ maxWidth: 400, margin: '0 auto', display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 100px)' }}>
         <BrandMark tenant={tenant} t={t} size={56} showName={false} />
         <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', margin: '28px 0 6px' }}>Bem-vindo</h1>

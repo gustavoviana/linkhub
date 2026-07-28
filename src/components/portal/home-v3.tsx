@@ -8,13 +8,14 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
+import { ThemeToggle, usePortalTokens } from './theme';
 import { BrandMark, PortalScreenProps, invoiceStanding } from './ui';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
 
 export function HomeV3(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
@@ -51,22 +52,25 @@ export function HomeV3(props: PortalScreenProps) {
               <div style={{ fontSize: 13, opacity: 0.85, fontWeight: 600 }}>Oi de novo,</div>
               <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.01em' }}>{firstName} 👋</div>
             </div>
-            <Link
-              href="/conta"
-              aria-label="Minha conta"
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 14,
-                background: 'rgba(255,255,255,0.2)',
-                color: 'inherit',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Icon name="user" size={18} />
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ThemeToggle t={t} onAccent size={44} style={{ borderRadius: 14 }} />
+              <Link
+                href="/conta"
+                aria-label="Minha conta"
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  background: 'rgba(255,255,255,0.2)',
+                  color: 'inherit',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Icon name="user" size={18} />
+              </Link>
+            </div>
           </div>
         </div>
 

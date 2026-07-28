@@ -8,13 +8,14 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
+import { ThemeToggle, usePortalTokens } from './theme';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
 import { PortalScreenProps, invoiceStanding } from './ui';
 
 export function WebDashboard(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   const kpis: {
@@ -92,6 +93,7 @@ export function WebDashboard(props: PortalScreenProps) {
         >
           <Icon name="help" size={14} /> Preciso de ajuda
         </Link>
+        <ThemeToggle t={t} size={36} style={{ borderRadius: 9 }} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 18 }}>

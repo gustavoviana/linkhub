@@ -6,6 +6,7 @@ import type { Tenant, SupportTicket } from '@/lib/supabase/types';
 import { formatDate } from '@/lib/utils';
 import { Icon, type IconName } from '@/components/portal/icons';
 import { portalTokens, rgba, type PortalTokens } from '@/components/portal/tokens';
+import { usePortalTokens } from '@/components/portal/theme';
 import { ScreenHeader } from '@/components/portal/shell';
 
 // Canais reais primeiro. As "resoluções rápidas" do protótipo viravam botões
@@ -41,7 +42,7 @@ const TOPICS: { icon: IconName; title: string; desc: string; message: string }[]
 ];
 
 export function SupportScreen({ tenant, tickets }: { tenant: Tenant; tickets: SupportTicket[] }) {
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
 
   const wa = (text: string) =>
     tenant.support_whatsapp

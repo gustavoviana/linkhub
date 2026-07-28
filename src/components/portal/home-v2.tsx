@@ -7,6 +7,7 @@ import { NavLink as Link } from './nav-link';
 import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
+import { ThemeToggle, usePortalTokens } from './theme';
 import { BrandMark, PortalScreenProps, invoiceStanding } from './ui';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
@@ -23,7 +24,7 @@ function glass(t: PortalTokens) {
 
 export function HomeV2(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
@@ -37,22 +38,25 @@ export function HomeV2(props: PortalScreenProps) {
               <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.01em' }}>{firstName}</div>
             </div>
           </div>
-          <Link
-            href="/conta"
-            aria-label="Minha conta"
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 14,
-              ...glass(t),
-              color: t.text,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Icon name="user" size={18} />
-          </Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ThemeToggle t={t} size={42} style={{ ...glass(t), borderRadius: 14, color: t.text }} />
+            <Link
+              href="/conta"
+              aria-label="Minha conta"
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 14,
+                ...glass(t),
+                color: t.text,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Icon name="user" size={18} />
+            </Link>
+          </div>
         </div>
 
         {openInvoice ? (

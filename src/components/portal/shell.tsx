@@ -10,6 +10,7 @@ import type { Tenant, Customer } from '@/lib/supabase/types';
 import { maskCpfCnpj, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, type PortalTokens } from './tokens';
+import { ThemeToggle, usePortalTokens } from './theme';
 import { BrandMark, TabBar, initials } from './ui';
 
 const NAV: { href: string; label: string; icon: IconName; match: (p: string) => boolean }[] = [
@@ -149,7 +150,7 @@ export function PortalShell({
   children: React.ReactNode;
   wide?: boolean;
 }) {
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
 
   return (
     <div style={{ background: t.bgGrad, color: t.text, minHeight: '100vh' }}>
@@ -210,8 +211,9 @@ export function ScreenHeader({
       <h1 style={{ flex: 1, textAlign: back ? 'center' : 'left', fontSize: 16, fontWeight: 700, margin: 0 }}>
         {title}
       </h1>
-      {back && !action && <div style={{ width: 40, flexShrink: 0 }} />}
-      {action}
+      {/* Sem ação própria, a tela ganha o botão de tema — que de quebra
+          equilibra o botão de voltar e mantém o título centrado. */}
+      {action ?? <ThemeToggle t={t} />}
     </div>
   );
 }

@@ -5,11 +5,12 @@ import type { Tenant, Invoice } from '@/lib/supabase/types';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, rgba } from '@/components/portal/tokens';
+import { usePortalTokens } from '@/components/portal/theme';
 import { ScreenHeader } from '@/components/portal/shell';
 import { invoiceStanding } from '@/components/portal/ui';
 
 export function InvoiceList({ tenant, invoices }: { tenant: Tenant; invoices: Invoice[] }) {
-  const t = portalTokens(tenant, tenant.dark_mode_default);
+  const t = usePortalTokens(tenant);
 
   // Em aberto: vencimento mais próximo primeiro — é o que o assinante
   // precisa resolver. Pagas: as três últimas bastam para ele se situar.
