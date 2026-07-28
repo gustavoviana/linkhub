@@ -46,14 +46,18 @@ export function PortalSidebar({
         flexShrink: 0,
       }}
     >
+      {/* Com logo enviada, ela fala por si: repetir o nome do provedor ao lado
+          só espreme os dois. Sem logo, o nome é a marca. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 10px 18px' }}>
         <BrandMark tenant={tenant} t={t} size={32} showName={false} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {tenant.name}
+        {!tenant.logo_url && (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {tenant.name}
+            </div>
+            <div style={{ fontSize: 10, color: t.text3 }}>Central do cliente</div>
           </div>
-          <div style={{ fontSize: 10, color: t.text3 }}>Central do cliente</div>
-        </div>
+        )}
       </div>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

@@ -171,17 +171,31 @@ export async function POST(req: NextRequest) {
   if (!customer.user_id) {
     // Primeiro acesso: cria o usuário no Supabase. No modo só-CPF a senha é
     // aleatória e descartada — ninguém precisa dela, o acesso é pelo CPF.
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    const { data: created } = await admin.auth.admin.createUser({
       email: authEmail,
       password: requirePassword ? password : crypto.randomBytes(24).toString('base64url'),
       email_confirm: true,
       user_metadata: { tenant_id, customer_id: customer.id, cpf: cpfClean },
     });
-    if (createErr || !created.user) {
-      return new NextResponse(createErr?.message ?? 'Erro ao criar acesso', { status: 500 });
+
+    let userId = created?.user?.id ?? null;
+    if (!userId) {
+      // O acesso já existia sem vínculo no cadastro — acontece quando o
+      // cliente é removido e volta numa ressincronização do ERP. Reaproveitar
+      // é o certo: antes o Supabase devolvia "already been registered" em
+      // inglês na cara do assinante e ele não entrava nunca mais.
+      const { data: existing } = await admin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: authEmail,
+      });
+      userId = existing?.user?.id ?? null;
     }
-    await (admin.from('customers').update({ user_id: created.user.id } as never)).eq('id', customer.id);
-    customer.user_id = created.user.id;
+    if (!userId) {
+      return new NextResponse('Não foi possível liberar seu acesso. Fale com o provedor.', { status: 500 });
+    }
+
+    await (admin.from('customers').update({ user_id: userId } as never)).eq('id', customer.id);
+    customer.user_id = userId;
   } else {
     // Já existe vínculo: usa o e-mail real do usuário, que pode ter sido
     // criado por uma regra anterior à desta versão.

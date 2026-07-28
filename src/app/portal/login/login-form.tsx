@@ -235,8 +235,12 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
           />
           <div style={{ position: 'relative', maxWidth: 460, margin: '0 auto' }}>
             <BrandMark tenant={tenant} t={t} size={44} showName={false} />
-            <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 600, marginTop: 18 }}>{tenant.name}</div>
-            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 6 }}>Olá! 👋</div>
+            {!tenant.logo_url && (
+              <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 600, marginTop: 18 }}>{tenant.name}</div>
+            )}
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', marginTop: tenant.logo_url ? 18 : 6 }}>
+              Olá! 👋
+            </div>
             <div style={{ fontSize: 14, opacity: 0.95, marginTop: 2 }}>Pronto pra navegar?</div>
           </div>
         </div>
@@ -282,8 +286,14 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
         />
         <div style={{ position: 'relative', zIndex: 1, maxWidth: 420, margin: '0 auto' }}>
           <BrandMark tenant={tenant} t={t} size={60} showName={false} />
-          <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.03em', margin: '22px 0 6px' }}>{tenant.name}</h1>
-          <p style={{ fontSize: 14, color: t.text2, margin: 0, lineHeight: 1.6 }}>Sua conexão, seu controle.</p>
+          {!tenant.logo_url && (
+            <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.03em', margin: '22px 0 6px' }}>
+              {tenant.name}
+            </h1>
+          )}
+          <p style={{ fontSize: 14, color: t.text2, margin: tenant.logo_url ? '22px 0 0' : 0, lineHeight: 1.6 }}>
+            Sua conexão, seu controle.
+          </p>
 
           <form
             onSubmit={onSubmit}
