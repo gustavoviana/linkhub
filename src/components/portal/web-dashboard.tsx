@@ -195,7 +195,9 @@ export function WebDashboard(props: PortalScreenProps) {
           )}
 
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${t.border}` }}>
-            <div style={{ fontSize: 11, color: t.text2, fontWeight: 600, marginBottom: 8 }}>Histórico</div>
+            {/* A lista começa pelas que vencem em seguida — chamar de
+                histórico contradizia as quatro linhas "Em aberto" logo abaixo. */}
+            <div style={{ fontSize: 11, color: t.text2, fontWeight: 600, marginBottom: 8 }}>Próximas faturas</div>
             {recentInvoices.length === 0 && (
               <div style={{ fontSize: 12, color: t.text3 }}>Nenhuma fatura ainda.</div>
             )}
