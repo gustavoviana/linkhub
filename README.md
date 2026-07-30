@@ -244,15 +244,27 @@ Tudo retorna no formato canônico (`ErpCustomer`, `ErpPlan`, `ErpInvoice`...).
 - **CPF como login**: o e-mail real do cliente é usado quando disponível; caso contrário, geramos `cliente-<slug>-<cpf>@linkhub.local` (não verificado).
 - **RLS** está habilitado em todas as tabelas com isolamento por `tenant_id`. Veja `20260512_001_rls.sql`.
 
+## Aplicativos nas lojas
+
+Cada provedor tem app próprio: Android empacotado como Trusted Web Activity
+(build automatizado, `.aab` assinado saindo do painel) e iOS como projeto
+Capacitor pronto para o Xcode. A ficha fica na aba **Aplicativo** de cada
+provedor, e as imagens da loja saem em **Marca & visual**.
+
+**O mapa da coisa toda está em [docs/aplicativos-nas-lojas.md](docs/aplicativos-nas-lojas.md)**
+— o que está pronto, o que falta, o que depende de configuração manual, e o
+plano do próximo passo (notificação de fatura). Comece por lá.
+
 ## Próximos passos
 
-- [ ] Criptografar `erp_config` com pgsodium / chave server-side
-- [ ] Worker (cron) de sincronização periódica do ERP
+- [ ] Notificação push de fatura vencendo — plano pronto em [docs/aplicativos-nas-lojas.md](docs/aplicativos-nas-lojas.md)
+- [ ] Entrada por biometria (Face ID / digital) no app
 - [ ] Webhook do gateway de pagamento para atualizar status de fatura em tempo real
 - [ ] Métricas e dashboard do tenant (consumo de banda, tickets abertos)
-- [ ] PWA installable do portal (manifest + service worker)
-- [ ] App mobile React Native compartilhando os mesmos endpoints
-- [ ] Domínio customizado por tenant (valida DNS via API da Vercel)
+- [x] Criptografar `erp_config` com chave server-side
+- [x] Worker (cron) de sincronização periódica do ERP
+- [x] PWA installable do portal (manifest + service worker)
+- [x] Domínio customizado por tenant (valida DNS via API da Vercel)
 
 ## Licença
 

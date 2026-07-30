@@ -22,6 +22,35 @@ mapa: o que já funciona, o que falta, e o que depende de você.
 
 ---
 
+## Onde paramos — 29/07/2026
+
+Tudo que está marcado ✅ acima já está em produção. O que precisa de mão
+humana, na ordem em que trava as coisas:
+
+- [ ] **Confirmar o gerador de imagens.** Quebrava na Vercel com
+      `libnss3.so: cannot open shared object file`; a correção está no
+      deploy (`src/lib/screenshot/browser.ts`), mas não deu para testar
+      daqui — a rota exige sessão de admin. Basta clicar em "Gerar imagens
+      das lojas" em Marca & visual. Se aparecer estouro de memória em vez do
+      erro antigo, a saída é `BROWSER_WS_ENDPOINT` (o código já usa).
+- [ ] **Rodar a migração 006** — a própria aba Aplicativo mostra o SQL com
+      botão de copiar.
+- [ ] **Criar `GITHUB_DISPATCH_TOKEN`** na Vercel.
+- [ ] **Instalar o workflow** copiando `docs/ci/android-build.yml` para
+      `.github/workflows/android-build.yml` (detalhes no passo 3 abaixo).
+- [ ] **Primeiro build Android de verdade.** O projeto TWA foi gerado e
+      conferido aqui, mas o Gradle nunca compilou — esta máquina não tem SDK
+      do Android e está com JDK 24, que o AGP não aceita. O primeiro build
+      vai dizer; o log fica linkado na lista de builds do painel.
+- [ ] **Colar o SHA-256 do Play App Signing** depois do primeiro envio, senão
+      o app abre com a barra de endereço.
+- [ ] **Backup da coluna `keystore_data`.** É a chave que assina os apps.
+
+Depois disso, o próximo trabalho de código é o push — o plano detalhado está
+no fim deste documento.
+
+---
+
 ## Ligar o Android (dois passos, uma vez só)
 
 **1. Rodar a migração.** Abra a aba Aplicativo de qualquer provedor: se as
@@ -159,18 +188,75 @@ e não é disso que a diretriz trata.
 
 ---
 
-## Próximo passo recomendado: push de fatura
+## Próximo trabalho: push de fatura
 
-É o item que destrava o iOS e o que mais agrega no Android. Desenho:
+É o item que destrava o iOS (sem ele a Apple reprova pela 4.2) e o que mais
+agrega no Android. O desenho abaixo já está decidido — amanhã é executar.
 
-1. Tabela `push_devices` (tenant, customer, token, plataforma).
-2. Web Push no Android/PWA (VAPID, já dá para fazer no service worker que
-   existe) e APNs no iOS via `@capacitor/push-notifications` + Firebase.
-3. Rotina diária: fatura vencendo em 3 dias, vencendo hoje, vencida ontem.
-   Reaproveita o cron que já sincroniza o ERP.
-4. Preferência por assinante em Minha Conta (a loja exige o opt-out).
+### Ordem de execução
 
-Estimativa: 4 a 6 dias. Depois disso, biometria (2 dias) e deep links (1 dia).
+**1. Migração 007 — `push_devices`**
+
+```
+id            uuid pk
+tenant_id     uuid → tenants
+customer_id   uuid → customers
+platform      text  'web' | 'ios'
+endpoint      text  URL do Web Push, ou o device token do APNs
+p256dh, auth  text  só no Web Push
+user_agent    text
+created_at, last_seen_at
+unique (tenant_id, endpoint)
+```
+
+Sem policy de leitura, como as tabelas do app: acesso só pela service role.
+Um `push_sends (device_id, invoice_id, kind, sent_at)` evita mandar o mesmo
+aviso duas vezes — `unique (invoice_id, kind, device_id)`.
+
+**2. Web Push — cobre Android (TWA) e PWA no desktop**
+
+Chaves VAPID em `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`
+(gerar com `npx web-push generate-vapid-keys`). Biblioteca `web-push`.
+O service worker de `src/app/sw.js/route.ts` ganha dois listeners:
+
+```js
+self.addEventListener('push', …)              // monta a notificação
+self.addEventListener('notificationclick', …) // abre /fatura/<id>
+```
+
+**3. Opt-in na central**
+
+Banner discreto na home ("Avisar quando a fatura chegar") e um interruptor em
+Minha Conta. O opt-out é exigência das duas lojas — sem ele a ficha é
+recusada. `POST /api/portal/push/subscribe` grava o dispositivo do assinante
+logado; `DELETE` remove.
+
+**4. Disparo diário**
+
+Rota nova `/api/cron/notify-invoices`, no mesmo esquema do
+`/api/cron/sync-erp` que já existe (`vercel.json` → `crons`). Uma vez por dia,
+meio-dia: para cada provedor, faturas **vencendo em 3 dias**, **vencendo
+hoje** e **vencidas ontem**. Texto com a marca do provedor e o valor.
+
+**5. iOS — APNs, sem Firebase**
+
+O gerador do projeto (`src/lib/appgen/ios-project.ts`) passa a incluir
+`@capacitor/push-notifications`. O aparelho devolve o device token do APNs; o
+envio é HTTP/2 direto com JWT assinado pela chave `.p8` da conta Apple do
+provedor (`APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_KEY_P8` cifrada por provedor).
+Evita a dependência do Firebase, que só existe para reempacotar o mesmo APNs.
+
+**6. Painel**
+
+A aba Aplicativo mostra quantos aparelhos estão registrados e ganha um botão
+"enviar notificação de teste" — é o que se usa para provar ao revisor da
+Apple que o recurso nativo existe.
+
+### Estimativa
+
+Passos 1 a 4 (Android e PWA funcionando): **3 a 4 dias**.
+Passo 5 (iOS): **2 dias**, depois de a conta Apple do primeiro cliente existir.
+Em seguida: biometria (2 dias) e deep links (1 dia).
 
 ---
 
