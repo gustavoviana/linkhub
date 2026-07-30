@@ -1,0 +1,150 @@
+name: Android — pacote do provedor
+
+# Empacota a central de um provedor como app Android (Trusted Web Activity)
+# e devolve o .aab assinado para o painel.
+#
+# Quem dispara é o botão "Gerar pacote Android" em /admin/tenants/[id]/aplicativo.
+# O painel manda um passe assinado; este job usa o passe para buscar a ficha
+# do app e para devolver o pacote. Nenhuma chave da Supabase entra aqui.
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_id:
+        description: ID do build no painel
+        required: true
+      api_url:
+        description: Endereço do painel (https://…)
+        required: true
+      token:
+        description: Passe assinado do build
+        required: true
+      label:
+        description: Nome e versão, só para aparecer na lista de execuções
+        required: false
+
+run-name: ${{ inputs.label || inputs.build_id }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar SDK do Android
+        uses: android-actions/setup-android@v3
+
+      - name: Buscar a ficha do app
+        id: config
+        env:
+          API: ${{ inputs.api_url }}
+          BUILD: ${{ inputs.build_id }}
+          TOKEN: ${{ inputs.token }}
+        run: |
+          set -euo pipefail
+          curl -fsS "$API/api/app-build/$BUILD?token=$TOKEN" -o config.json
+          echo "app=$(jq -r .app_name config.json)" >> "$GITHUB_OUTPUT"
+          echo "pkg=$(jq -r .package_id config.json)" >> "$GITHUB_OUTPUT"
+          jq 'del(.keystore_password, .keystore_base64)' config.json
+
+      - name: Montar o projeto Android
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/twa-tools
+          cd /tmp/twa-tools
+          npm init -y > /dev/null
+          npm install --silent @bubblewrap/core@1.24.1
+          cd "$GITHUB_WORKSPACE"
+          TWA_MODULES_DIR=/tmp/twa-tools node .github/scripts/twa-project.mjs config.json projeto
+
+      - name: Chave de assinatura
+        id: signing
+        run: |
+          set -euo pipefail
+          ALIAS=$(jq -r .keystore_alias config.json)
+          PASS=$(jq -r .keystore_password config.json)
+          EXISTING=$(jq -r '.keystore_base64 // empty' config.json)
+          CN=$(jq -r .app_name config.json)
+
+          if [ -n "$EXISTING" ]; then
+            echo "$EXISTING" | base64 -d > projeto/android.keystore
+            echo "novo=false" >> "$GITHUB_OUTPUT"
+          else
+            # Primeiro build deste provedor: a chave nasce aqui e volta
+            # cifrada para o painel. 10000 dias porque a Play exige validade
+            # até pelo menos 2033.
+            keytool -genkeypair -v \
+              -keystore projeto/android.keystore \
+              -alias "$ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$PASS" -keypass "$PASS" \
+              -dname "CN=$CN, OU=LinkHub, O=LinkHub, L=Brasil, S=Brasil, C=BR"
+            echo "novo=true" >> "$GITHUB_OUTPUT"
+          fi
+
+          FP=$(keytool -list -v -keystore projeto/android.keystore -alias "$ALIAS" -storepass "$PASS" \
+               | grep -i 'SHA256:' | head -1 | sed 's/.*SHA256: *//' | tr -d ' \r')
+          echo "sha256=$FP" >> "$GITHUB_OUTPUT"
+          echo "Impressão digital de upload: $FP"
+
+      - name: Compilar o pacote
+        working-directory: projeto
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon bundleRelease
+
+      - name: Assinar
+        run: |
+          set -euo pipefail
+          ALIAS=$(jq -r .keystore_alias config.json)
+          PASS=$(jq -r .keystore_password config.json)
+          AAB=projeto/app/build/outputs/bundle/release/app-release.aab
+          jarsigner -verbose:false -sigalg SHA256withRSA -digestalg SHA-256 \
+            -keystore projeto/android.keystore \
+            -storepass "$PASS" -keypass "$PASS" \
+            "$AAB" "$ALIAS"
+          jarsigner -verify "$AAB" > /dev/null
+          ls -lh "$AAB"
+
+      - name: Devolver o pacote ao painel
+        if: success()
+        env:
+          API: ${{ inputs.api_url }}
+          BUILD: ${{ inputs.build_id }}
+          TOKEN: ${{ inputs.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          ARGS=(-F "status=done" -F "run_url=$RUN"
+                -F "aab=@projeto/app/build/outputs/bundle/release/app-release.aab")
+          if [ "${{ steps.signing.outputs.novo }}" = "true" ]; then
+            ARGS+=(-F "keystore=@projeto/android.keystore"
+                   -F "keystore_sha256=${{ steps.signing.outputs.sha256 }}")
+          fi
+          curl -fsS -X POST "${ARGS[@]}" "$API/api/app-build/$BUILD?token=$TOKEN"
+
+      - name: Avisar a falha
+        if: failure()
+        env:
+          API: ${{ inputs.api_url }}
+          BUILD: ${{ inputs.build_id }}
+          TOKEN: ${{ inputs.token }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          curl -fsS -X POST \
+            -F "status=error" \
+            -F "run_url=$RUN" \
+            -F "error=O build falhou. Abra o log da execução para ver em qual passo." \
+            "$API/api/app-build/$BUILD?token=$TOKEN" || true

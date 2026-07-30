@@ -40,10 +40,20 @@ vercel env add GITHUB_DISPATCH_TOKEN production
 Opcionais, se um dia mudar de repositório ou branch: `GITHUB_BUILD_REPO`,
 `GITHUB_BUILD_WORKFLOW`, `GITHUB_BUILD_REF`.
 
-> O arquivo `.github/workflows/android-build.yml` está num commit local que
-> não subiu: o token que empurra este repositório não tem escopo `workflow` e
-> o GitHub recusou. Gere um token com esse escopo e dê `git push`, ou cole o
-> arquivo pelo editor do GitHub.
+**3. Instalar o workflow.** O arquivo está versionado em
+`docs/ci/android-build.yml`, e não em `.github/workflows/`, porque o token que
+empurra este repositório não tem escopo `workflow` — o GitHub recusa o push de
+arquivos de CI vindos dele. Duas saídas, ambas de um minuto:
+
+- **Pelo site**: no GitHub, *Add file → Create new file*, nome
+  `.github/workflows/android-build.yml`, cole o conteúdo de
+  `docs/ci/android-build.yml`, commit na `main`.
+- **Pelo terminal**: gere um token com escopo `workflow`, depois
+  `mkdir -p .github/workflows && cp docs/ci/android-build.yml .github/workflows/`
+  e `git push`.
+
+Sem esse arquivo na `main`, o botão de build responde que o GitHub recusou o
+disparo.
 
 ---
 
