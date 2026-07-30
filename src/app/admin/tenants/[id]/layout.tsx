@@ -25,6 +25,7 @@ export default async function TenantLayout({
   const tabs = [
     { href: `/admin/tenants/${id}`, label: 'Visão geral' },
     { href: `/admin/tenants/${id}/branding`, label: 'Marca & visual' },
+    { href: `/admin/tenants/${id}/aplicativo`, label: 'Aplicativo' },
     { href: `/admin/tenants/${id}/erp`, label: 'Integração ERP' },
     { href: `/admin/tenants/${id}/dominio`, label: 'Domínio' },
     { href: `/admin/tenants/${id}/customers`, label: 'Clientes' },
