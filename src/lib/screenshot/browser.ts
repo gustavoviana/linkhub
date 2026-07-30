@@ -30,6 +30,14 @@ export async function launchBrowser(): Promise<Browser> {
   if (endpoint) return puppeteer.connect({ browserWSEndpoint: endpoint });
 
   if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    // O @sparticuz/chromium só descompacta as bibliotecas do Chrome (libnss3
+    // e companhia) quando reconhece um ambiente Lambda por AWS_EXECUTION_ENV
+    // ou AWS_LAMBDA_JS_RUNTIME. A Vercel roda em Lambda mas não define
+    // nenhuma das duas — sem esta dica o binário é extraído sozinho, sem as
+    // bibliotecas, e o navegador morre com "libnss3.so: cannot open shared
+    // object file". Precisa vir antes do import: a detecção roda na carga
+    // do módulo.
+    process.env.AWS_LAMBDA_JS_RUNTIME ??= 'nodejs20.x';
     const chromium = (await import('@sparticuz/chromium')).default;
     // Uma fonte extra (emoji, por exemplo) quando o provedor quiser: o
     // Chromium de serverless vem sem nenhuma instalada.

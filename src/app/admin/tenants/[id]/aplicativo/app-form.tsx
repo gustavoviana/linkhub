@@ -274,10 +274,38 @@ export default function AppForm({
         <Button type="button" variant="outline" onClick={build} loading={building} disabled={Boolean(running)}>
           {running ? 'Build em andamento…' : 'Gerar pacote Android (.aab)'}
         </Button>
+        <a
+          href={`/api/tenants/${tenant.id}/app/ios`}
+          className="text-sm font-medium text-brand hover:underline"
+        >
+          Baixar projeto iOS (Xcode)
+        </a>
         {ok && <span className="text-sm text-success">{ok}</span>}
         {error && <span className="text-sm text-danger">{error}</span>}
         {!saved && <span className="text-sm text-fg-2">Salve a ficha antes do primeiro build.</span>}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Aplicativo iOS</CardTitle>
+          <CardSubtitle>Projeto pronto para abrir no Xcode — o .ipa sai do seu Mac</CardSubtitle>
+        </CardHeader>
+        <CardBody className="space-y-3">
+          <p className="text-sm text-fg-2 leading-relaxed">
+            O download traz um projeto Capacitor com o identificador, o nome, as cores e o ícone
+            deste provedor, apontando para {origin}. No Mac:{' '}
+            <code className="font-mono text-xs bg-bg-3 px-1.5 py-0.5 rounded">npm install</code> →{' '}
+            <code className="font-mono text-xs bg-bg-3 px-1.5 py-0.5 rounded">npx cap add ios</code>{' '}
+            → Archive no Xcode. O passo a passo completo vai no LEIA-ME do zip.
+          </p>
+          <p className="text-sm text-fg-2 leading-relaxed">
+            <strong>Antes de submeter:</strong> a Apple reprova app que é só um site embrulhado
+            (diretriz 4.2). Notificação de fatura vencendo e entrada por Face ID são o que fazem
+            passar — ainda não estão prontos. E quem envia deve ser a conta de desenvolvedor do
+            próprio provedor, não a da agência (diretriz 4.2.6).
+          </p>
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader>

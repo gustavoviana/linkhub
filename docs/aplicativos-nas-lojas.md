@@ -1,136 +1,177 @@
 # Aplicativos dos provedores nas lojas
 
-Como a central de cada provedor vira um app baixável — o que já está pronto,
-o que precisa ser ligado uma vez, e o caminho do iOS.
+Como a central de cada provedor vira um app baixável. Este documento é o
+mapa: o que já funciona, o que falta, e o que depende de você.
 
 ---
 
-## Android — pronto
+## Situação
 
-A central vira um **Trusted Web Activity**: o app abre a central do provedor
+| Etapa | Estado |
+|---|---|
+| PWA por provedor (manifest, service worker, ícones, assetlinks) | ✅ em produção |
+| Ícone do app a partir da marca cadastrada, substituível no painel | ✅ em produção |
+| Aba **Aplicativo** no painel | ✅ em produção |
+| Build Android automatizado → `.aab` assinado | ✅ código pronto — falta ligar (2 passos abaixo) |
+| Screenshots e ícones das lojas | ✅ em produção |
+| Projeto iOS para o Xcode | ✅ em produção |
+| Notificação push de fatura | ❌ próximo passo — é o que faz a Apple aceitar |
+| Entrada por Face ID / biometria | ❌ depois do push |
+| Deep links (abrir link da fatura dentro do app) | ❌ pequeno, depois |
+| Envio automático para Play e TestFlight | ❌ opcional, quando o fluxo manual cansar |
+
+---
+
+## Ligar o Android (dois passos, uma vez só)
+
+**1. Rodar a migração.** Abra a aba Aplicativo de qualquer provedor: se as
+tabelas não existirem, a própria tela mostra o SQL com um botão de copiar e o
+link do SQL Editor. Cole, rode, recarregue. O arquivo também está em
+`supabase/migrations/20260729_006_tenant_apps.sql`.
+
+**2. Criar o token do GitHub.** Um fine-grained token em
+github.com/settings/tokens com acesso ao repositório `gustavoviana/linkhub` e
+permissão **Actions: read and write**. Depois:
+
+```
+vercel env add GITHUB_DISPATCH_TOKEN production
+```
+
+Opcionais, se um dia mudar de repositório ou branch: `GITHUB_BUILD_REPO`,
+`GITHUB_BUILD_WORKFLOW`, `GITHUB_BUILD_REF`.
+
+> O arquivo `.github/workflows/android-build.yml` está num commit local que
+> não subiu: o token que empurra este repositório não tem escopo `workflow` e
+> o GitHub recusou. Gere um token com esse escopo e dê `git push`, ou cole o
+> arquivo pelo editor do GitHub.
+
+---
+
+## Android: como funciona
+
+A central vira um **Trusted Web Activity** — o app abre o domínio do provedor
 em tela cheia, com o Chrome renderizando por baixo. É o caminho que o próprio
-Google recomenda para site → app, e tem uma vantagem grande para o seu
-negócio: **atualização da central não passa por revisão de loja**. Deploy na
-Vercel e o app de todo mundo já está atualizado. Só mudança de ícone, nome ou
-versão exige novo envio.
-
-### Ligar uma vez
-
-1. **Rodar a migração.** No SQL Editor do Supabase, cole
-   `supabase/migrations/20260729_006_tenant_apps.sql`. Cria `tenant_apps` e
-   `tenant_app_builds`. Sem isso a aba Aplicativo mostra um aviso no lugar do
-   formulário.
-
-2. **Criar o token do GitHub.** Um fine-grained token em
-   github.com/settings/tokens com acesso ao repositório `gustavoviana/linkhub`
-   e permissão **Actions: read and write**. Depois:
-
-   ```
-   vercel env add GITHUB_DISPATCH_TOKEN production
-   ```
-
-   Variáveis opcionais, se um dia mudar de repo ou de branch:
-   `GITHUB_BUILD_REPO`, `GITHUB_BUILD_WORKFLOW`, `GITHUB_BUILD_REF`.
-
-3. **Conferir o bucket.** `tenant-apps`, privado — já criado.
+Google recomenda para site → app, e traz uma vantagem grande: **atualizar a
+central não passa por revisão de loja**. Deploy na Vercel e o app de todos os
+clientes já está atualizado. Só ícone, nome e versão exigem novo envio.
 
 ### O fluxo de cada provedor
 
 1. Painel → provedor → aba **Aplicativo**. Nome, pacote e ícone já vêm
    preenchidos a partir da marca cadastrada. Salvar.
-2. **Gerar pacote Android**. O GitHub Actions monta o projeto, cria a chave de
-   assinatura na primeira vez, compila e devolve o `.aab`. Leva de 5 a 10
-   minutos; a página se atualiza sozinha.
-3. **Baixar .aab** e enviar no Play Console → Produção (ou Teste interno).
+2. **Gerar pacote Android**. O GitHub Actions monta o projeto com o gerador do
+   Bubblewrap, cria a chave de assinatura na primeira vez, compila e devolve o
+   `.aab`. Leva de 5 a 10 minutos; a página se atualiza sozinha.
+3. **Baixar .aab** e enviar no Play Console → Teste interno primeiro,
+   Produção depois.
 4. Depois do primeiro envio, o Play Console mostra em *Configuração →
    Integridade do app* a **impressão digital SHA-256** da chave que o Google
    usa para reassinar. Cole no campo do painel e salve.
 5. Confira `https://<dominio-do-provedor>/.well-known/assetlinks.json` — deve
    listar o pacote e a impressão digital. **Sem esse passo o app abre com a
-   barra de endereço do navegador aparecendo.** É a falha mais comum de TWA.
+   barra de endereço do navegador em cima.** É a falha número um de TWA.
 
 ### A chave de assinatura
 
 Nasce no primeiro build, dentro do runner, e volta cifrada (AES-256-GCM, mesma
 chave do `ERP_CONFIG_ENCRYPTION_KEY`) para a tabela `tenant_apps`. **Perder o
 banco sem backup = não conseguir mais atualizar os apps publicados.** Com o
-Play App Signing ativado dá para pedir redefinição da chave de upload ao
-Google, mas é processo manual e demorado — vale um backup separado da coluna
+Play App Signing dá para pedir redefinição da chave de upload ao Google, mas é
+processo manual e demorado — vale um backup separado da coluna
 `keystore_data`.
 
-### Exigências da Play que valem hoje
+### Exigências da Play
 
 | Item | Situação |
 |---|---|
 | Formato AAB | ✅ o build já gera |
 | `targetSdk` 35 | ✅ (36 vira obrigatório perto de agosto/2026 — é bump no Bubblewrap) |
-| Ícone 512 e capa 1024×500 | ✅ pela aba Marca & visual → "Publicar nas lojas" |
+| Ícone 512 e capa 1024×500 | ✅ Marca & visual → "Publicar nas lojas" |
 | Política de privacidade | ⚠️ URL por provedor, ainda manual |
 | Formulário de Segurança de Dados | ⚠️ manual, uma vez por app |
-| Conta nova pessoa física: 12 testadores por 14 dias | ⚠️ oriente o cliente a abrir conta **de organização** e escapar disso |
+| Conta nova de pessoa física: 12 testadores por 14 dias | ⚠️ oriente o cliente a abrir conta **de organização** e escapar disso |
 
 ---
 
-## iOS — o caminho
+## iOS: como funciona
 
-Não dá para gerar `.ipa` em Linux: assinar exige `codesign`, que só existe em
-macOS. Como você tem o MacBook, o desenho muda de figura — o painel entrega o
-**projeto pronto** e o Xcode faz o resto.
+Não existe TWA no iOS, e `.ipa` só se assina em macOS. Então o painel entrega
+o **projeto pronto** e o Xcode do seu MacBook faz o resto — que é exatamente
+como você pediu.
 
-### Abordagem recomendada: Capacitor
+Botão **Baixar projeto iOS (Xcode)** na aba Aplicativo. O zip traz um projeto
+Capacitor com identificador, nome, cores e ícone daquele provedor, apontando
+para a central dele. No Mac:
 
-TWA não existe no iOS. O equivalente é um app nativo mínimo com `WKWebView`
-apontando para a central. Capacitor é o mais maduro para isso e dá acesso ao
-que a Apple exige ver de nativo.
+```
+npm install
+npx cap add ios                       # gera o projeto do Xcode
+npx capacitor-assets generate --ios   # ícones e splash
+npx cap sync ios
+npx cap open ios
+```
 
-### O ponto crítico: diretriz 4.2
+Depois: time de desenvolvimento em *Signing & Capabilities*, destino *Any iOS
+Device*, *Product → Archive → Distribute App*. TestFlight primeiro, sempre —
+um `.ipa` de App Store não instala direto no aparelho.
 
-**Um WebView que só abre um site é rejeitado.** Não adianta mexer no layout
-para "disfarçar" — o revisor abre o app, vê que é um site embrulhado, e
+### O que falta antes de submeter (importante)
+
+**A Apple reprova app que é só um site embrulhado** — diretriz 4.2, Minimum
+Functionality. Hoje o projeto é exatamente isso. Não adianta mexer no layout
+para disfarçar: o revisor abre o app, vê um site dentro de uma casca, e
 recusa. O que muda o resultado é funcionalidade nativa de verdade:
 
-1. **Push de fatura vencendo** — sozinho já justifica o app, e é o que os
-   provedores mais pedem. Também é o argumento mais forte na resposta ao
-   revisor.
+1. **Push de fatura vencendo** — o mais forte, e o que os provedores mais
+   pedem. Também é o melhor argumento na resposta ao revisor.
 2. **Face ID / Touch ID** para entrar sem digitar CPF.
 3. **Cache offline** da última fatura e do código Pix.
 4. **Deep links** (`apple-app-site-association`, no mesmo esquema por host que
    o `assetlinks.json` já usa).
 
-Com esses quatro, o app passa. Sem push, eu não submeteria.
+Com push + biometria, passa. Sem push, eu não submeteria.
 
-### A diretriz 4.2.6, que é a que pega em agência
+### Quem publica (diretriz 4.2.6)
 
-Apps saídos de gerador/template são recusados **quando enviados pela conta do
-fornecedor**. O texto da Apple é explícito: quem envia tem que ser o dono do
-conteúdo. Traduzindo para o seu caso:
-
-- **Cliente com conta própria** (US$ 99/ano, que ele já vai bancar): caminho
-  limpo, é exatamente o que a Apple pede. Você entra como desenvolvedor
-  autorizado na conta dele.
-- **Sua conta de agência**: funciona para os primeiros, fica arriscado no
-  volume. Se for por aí — espace os envios, e garanta que cada app tenha
-  conteúdo e marca claramente distintos.
-
-Na Play o mesmo raciocínio vale, com fiscalização bem mais leve.
+Apps saídos de gerador são recusados **quando enviados pela conta do
+fornecedor**. Como o cliente vai bancar os US$ 99/ano, publique **na conta
+dele** — é exatamente o que a Apple pede, e você entra como desenvolvedor
+autorizado. A conta de agência funciona para os primeiros e fica arriscada no
+volume; se for por aí, espace os envios e garanta marca e conteúdo bem
+distintos entre os apps.
 
 ### Diferenciação entre os apps
 
-A central já tem três layouts (v1/v2/v3), cores, logo e nome por provedor —
-use isso de verdade: cliente diferente, layout diferente. Combinado com
-ícone, splash, nome e descrição próprios, cada app fica visivelmente distinto.
-O que **não** funciona é maquiagem: mudar um raio de borda para parecer outro
-app não engana revisão, e não é disso que a diretriz trata.
+Já existe de graça: três layouts (v1/v2/v3), cores, logo e nome por provedor.
+Use layouts diferentes entre clientes e cada app fica visivelmente distinto.
+Maquiagem — mudar um raio de borda para parecer outro app — não engana revisão
+e não é disso que a diretriz trata.
 
-### Passo a passo quando for a hora
+---
 
-1. O painel gera o projeto Capacitor do provedor (ícones, nome, bundle id,
-   cores, URL) — mesma ficha da aba Aplicativo, botão separado.
-2. No MacBook: `npx cap sync ios`, abrir no Xcode, Archive, Distribute App.
-3. Requisitos atuais: Xcode 16+, SDK iOS 18, `PrivacyInfo.xcprivacy` (o
-   Capacitor já traz), declaração de criptografia e política de privacidade.
-4. TestFlight primeiro, sempre — o `.ipa` de App Store não instala direto no
-   aparelho.
+## Próximo passo recomendado: push de fatura
 
-Esforço estimado: 4–6 dias para push + biometria, 3–4 dias para o gerador do
-projeto iOS.
+É o item que destrava o iOS e o que mais agrega no Android. Desenho:
+
+1. Tabela `push_devices` (tenant, customer, token, plataforma).
+2. Web Push no Android/PWA (VAPID, já dá para fazer no service worker que
+   existe) e APNs no iOS via `@capacitor/push-notifications` + Firebase.
+3. Rotina diária: fatura vencendo em 3 dias, vencendo hoje, vencida ontem.
+   Reaproveita o cron que já sincroniza o ERP.
+4. Preferência por assinante em Minha Conta (a loja exige o opt-out).
+
+Estimativa: 4 a 6 dias. Depois disso, biometria (2 dias) e deep links (1 dia).
+
+---
+
+## Variáveis de ambiente
+
+| Variável | Para quê |
+|---|---|
+| `GITHUB_DISPATCH_TOKEN` | acionar o build Android (obrigatória) |
+| `GITHUB_BUILD_REPO` / `_WORKFLOW` / `_REF` | mudar repo, arquivo ou branch do CI |
+| `ERP_CONFIG_ENCRYPTION_KEY` | já existia — agora também cifra a keystore |
+| `STORE_SHOT_SECRET` | assina o passe das rotas de captura; sem ela usa a service key |
+| `BROWSER_WS_ENDPOINT` | manda os screenshots para um serviço de navegador em vez do Chromium da função |
+| `CHROME_PATH` | só em dev, quando o Chrome não está num caminho conhecido |
+| `STORE_SHOT_FONT_URL` | fonte extra (emoji) no Chromium serverless |
