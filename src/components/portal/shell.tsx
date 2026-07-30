@@ -148,11 +148,14 @@ export function PortalShell({
   customer,
   children,
   wide = false,
+  activePath,
 }: {
   tenant: Tenant;
   customer: Customer;
   children: React.ReactNode;
   wide?: boolean;
+  /** Aba acesa quando a casca é montada fora do roteador (mockup, lojas). */
+  activePath?: string;
 }) {
   const t = usePortalTokens(tenant);
 
@@ -172,7 +175,7 @@ export function PortalShell({
         </main>
       </div>
       <div className="lg:hidden">
-        <TabBar t={t} />
+        <TabBar t={t} path={activePath} />
       </div>
     </div>
   );

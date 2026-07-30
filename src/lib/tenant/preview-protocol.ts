@@ -17,7 +17,7 @@ export type PreviewTheme = Pick<
   | 'support_email'
 >;
 
-export type PreviewScreen = 'home' | 'login';
+export type { PreviewScreen } from '@/lib/tenant/preview-screens';
 
 /** Painel → iframe: novo estado do formulário. */
 export const PREVIEW_UPDATE = 'linkhub:preview-update';

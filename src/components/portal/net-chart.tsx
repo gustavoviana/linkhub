@@ -368,6 +368,9 @@ const PAD = { top: 16, right: 12, bottom: 30, left: 46 };
 function Shell({ t, children, fill }: { t: PortalTokens; children: React.ReactNode; fill?: boolean }) {
   return (
     <div
+      // Âncora do screenshot de consumo: o mockup e a exportação rolam a home
+      // até aqui para o gráfico aparecer inteiro na imagem.
+      data-net-chart
       style={{
         padding: 20,
         background: t.surface,

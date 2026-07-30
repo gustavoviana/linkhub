@@ -2,12 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { tenantThemeVars } from '@/lib/tenant/theme';
+import { PREVIEW_SCREENS, type PreviewScreen } from '@/lib/tenant/preview-screens';
 import {
   PREVIEW_READY,
   PREVIEW_UPDATE,
-  type PreviewScreen,
   type PreviewTheme,
 } from '@/lib/tenant/preview-protocol';
+import {
+  DynamicIsland,
+  HomeIndicator,
+  IPHONE_16_PRO_MAX,
+  StatusBar,
+} from '@/components/portal/device-chrome';
 import { cn } from '@/lib/utils';
 
 // Mockup de iPhone 16 Pro Max em escala. As medidas são as reais do aparelho
@@ -15,22 +21,15 @@ import { cn } from '@/lib/utils';
 // que aparece aqui é o portal de verdade renderizando em largura de celular,
 // com os breakpoints se comportando como no aparelho.
 
-const VIEWPORT_W = 440;
-const VIEWPORT_H = 956;
 const SCALE = 0.62;
-const SCREEN_W = VIEWPORT_W * SCALE;
-const SCREEN_H = VIEWPORT_H * SCALE;
+const SCREEN_W = IPHONE_16_PRO_MAX.width * SCALE;
+const SCREEN_H = IPHONE_16_PRO_MAX.height * SCALE;
 const BEZEL = 9;
-
-const SCREENS: { id: PreviewScreen; label: string }[] = [
-  { id: 'home', label: 'Início' },
-  { id: 'login', label: 'Entrada' },
-];
 
 export function PhonePreview({ tenantId, theme }: { tenantId: string; theme: PreviewTheme }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [readyToken, setReadyToken] = useState(0);
-  const [screen, setScreen] = useState<PreviewScreen>('home');
+  const [screen, setScreen] = useState<PreviewScreen>('inicio');
 
   // Serializado pra o efeito não disparar a cada render do formulário.
   const themeKey = JSON.stringify(theme);
@@ -63,14 +62,14 @@ export function PhonePreview({ tenantId, theme }: { tenantId: string; theme: Pre
 
   return (
     <div className="w-[304px]">
-      <div className="flex items-center gap-1 p-1 mb-4 bg-bg-3 rounded-md">
-        {SCREENS.map((s) => (
+      <div className="flex flex-wrap gap-1 p-1 mb-4 bg-bg-3 rounded-md">
+        {PREVIEW_SCREENS.map((s) => (
           <button
             key={s.id}
             type="button"
             onClick={() => setScreen(s.id)}
             className={cn(
-              'flex-1 text-xs font-medium py-1.5 rounded transition-colors',
+              'flex-1 basis-[30%] text-xs font-medium py-1.5 rounded transition-colors',
               screen === s.id ? 'bg-bg-2 text-fg shadow-sm' : 'text-fg-2 hover:text-fg',
             )}
           >
@@ -112,50 +111,21 @@ export function PhonePreview({ tenantId, theme }: { tenantId: string; theme: Pre
             title="Prévia da central do cliente"
             className="block border-0"
             style={{
-              width: VIEWPORT_W,
-              height: VIEWPORT_H,
+              width: IPHONE_16_PRO_MAX.width,
+              height: IPHONE_16_PRO_MAX.height,
               transform: `scale(${SCALE})`,
               transformOrigin: 'top left',
             }}
           />
 
-          <div
-            className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 pointer-events-none select-none"
-            style={{ height: 27, color: screenFg }}
-          >
-            {/* 9:41 — a hora que a Apple usa em todo material do iPhone. */}
-            <span className="text-[11px] font-semibold tracking-tight">9:41</span>
-            <StatusIcons color={screenFg} />
-          </div>
-
-          <div
-            className="absolute rounded-full bg-black"
-            style={{
-              width: 125 * SCALE,
-              height: 37 * SCALE,
-              top: 7,
-              left: '50%',
-              transform: 'translateX(-50%)',
-            }}
-          />
-
-          <div
-            className="absolute rounded-full pointer-events-none"
-            style={{
-              width: 140 * SCALE,
-              height: 4,
-              bottom: 7,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: screenFg,
-              opacity: 0.35,
-            }}
-          />
+          <StatusBar color={screenFg} scale={SCALE} />
+          <DynamicIsland scale={SCALE} />
+          <HomeIndicator color={screenFg} scale={SCALE} />
         </div>
       </div>
 
       <p className="text-xs text-fg-2 text-center mt-4 leading-relaxed">
-        Prévia real da central, com dados de exemplo.
+        Prévia real da central, com sua marca e um cliente de exemplo.
         <br />
         Acompanha o que você edita — salve para publicar.
       </p>
@@ -169,38 +139,5 @@ function SideButton({ className }: { className: string }) {
       className={cn('absolute w-[3px] rounded-full', className)}
       style={{ background: 'linear-gradient(180deg, #8c8c94, #5e5e66)' }}
     />
-  );
-}
-
-function StatusIcons({ color }: { color: string }) {
-  return (
-    <span className="flex items-center gap-1">
-      <svg width="15" height="10" viewBox="0 0 17 11" fill={color} aria-hidden>
-        <rect x="0" y="7.5" width="3" height="3.5" rx="1" opacity="0.95" />
-        <rect x="4.5" y="5.5" width="3" height="5.5" rx="1" opacity="0.95" />
-        <rect x="9" y="3" width="3" height="8" rx="1" opacity="0.95" />
-        <rect x="13.5" y="0.5" width="3" height="10.5" rx="1" opacity="0.4" />
-      </svg>
-      <svg width="13" height="10" viewBox="0 0 15 11" fill="none" stroke={color} aria-hidden>
-        <path d="M1 3.6a9.5 9.5 0 0 1 13 0" strokeWidth="1.6" strokeLinecap="round" />
-        <path d="M3.6 6.4a5.8 5.8 0 0 1 7.8 0" strokeWidth="1.6" strokeLinecap="round" />
-        <circle cx="7.5" cy="9.3" r="1.1" fill={color} stroke="none" />
-      </svg>
-      <svg width="19" height="10" viewBox="0 0 25 12" aria-hidden>
-        <rect
-          x="0.6"
-          y="0.6"
-          width="21"
-          height="10.8"
-          rx="3"
-          fill="none"
-          stroke={color}
-          strokeOpacity="0.4"
-          strokeWidth="1.2"
-        />
-        <rect x="2.4" y="2.4" width="14" height="7.2" rx="1.8" fill={color} />
-        <path d="M23 4.2v3.6a2 2 0 0 0 0-3.6Z" fill={color} fillOpacity="0.5" />
-      </svg>
-    </span>
   );
 }

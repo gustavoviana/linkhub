@@ -170,8 +170,11 @@ function glassBar(t: PortalTokens) {
  * com rótulos, V2 pílula compacta só de ícones, V3 barra larga com pílulas
  * coloridas.
  */
-export function TabBar({ t }: { t: PortalTokens }) {
+export function TabBar({ t, path }: { t: PortalTokens; path?: string }) {
+  // `path` é para as telas montadas fora do roteador — mockup e screenshots
+  // das lojas —, onde a URL real não diz em que aba o assinante está.
   const pathname = usePathname();
+  const current = path ?? pathname;
 
   if (t.layout === 'v2') {
     return (
@@ -191,7 +194,7 @@ export function TabBar({ t }: { t: PortalTokens }) {
         }}
       >
         {TABS.map((tab) => {
-          const active = tab.match(pathname);
+          const active = tab.match(current);
           return (
             <Link
               key={tab.href}
@@ -238,7 +241,7 @@ export function TabBar({ t }: { t: PortalTokens }) {
         }}
       >
         {TABS.map((tab) => {
-          const active = tab.match(pathname);
+          const active = tab.match(current);
           return (
             <Link
               key={tab.href}
@@ -284,7 +287,7 @@ export function TabBar({ t }: { t: PortalTokens }) {
       }}
     >
       {TABS.map((tab) => {
-        const active = tab.match(pathname);
+        const active = tab.match(current);
         return (
           <Link
             key={tab.href}

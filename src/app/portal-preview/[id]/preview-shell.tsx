@@ -1,26 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Tenant, TenantLayout } from '@/lib/supabase/types';
+import type { Tenant } from '@/lib/supabase/types';
 import type { PreviewData } from '@/lib/tenant/preview-data';
-import { tenantCssText } from '@/lib/tenant/theme';
-import { portalTokens } from '@/components/portal/tokens';
+import type { PreviewScreen } from '@/lib/tenant/preview-screens';
 import { PreviewContext } from '@/components/portal/nav-link';
-import { TabBar } from '@/components/portal/ui';
-import { HomeV1 } from '@/components/portal/home-v1';
-import { HomeV2 } from '@/components/portal/home-v2';
-import { HomeV3 } from '@/components/portal/home-v3';
-import LoginForm from '@/app/portal/login/login-form';
+import { PortalThemeProvider } from '@/components/portal/theme';
+import { PreviewScreenView } from '@/components/portal/preview-screens';
 import {
   PREVIEW_READY,
   PREVIEW_UPDATE,
-  type PreviewScreen,
   type PreviewTheme,
 } from '@/lib/tenant/preview-protocol';
 
 export function PreviewShell({ tenant, data }: { tenant: Tenant; data: PreviewData }) {
   const [theme, setTheme] = useState<PreviewTheme>(tenant);
-  const [screen, setScreen] = useState<PreviewScreen>('home');
+  const [screen, setScreen] = useState<PreviewScreen>('inicio');
 
   useEffect(() => {
     function onMessage(event: MessageEvent) {
@@ -36,43 +31,23 @@ export function PreviewShell({ tenant, data }: { tenant: Tenant; data: PreviewDa
   }, []);
 
   const merged: Tenant = { ...tenant, ...theme };
-  const dark = merged.dark_mode_default;
-  const Layout = pickLayout(merged.layout);
 
   return (
     <PreviewContext.Provider value>
-      <style>{`
-        :root{${tenantCssText(merged, dark)}}
-        /* Levanta a barra de navegação acima do indicador de home do iPhone. */
-        .preview-viewport nav{padding-bottom:16px}
-      `}</style>
-      <div
-        data-theme={dark ? 'dark' : 'light'}
-        data-layout={merged.layout}
-        className="preview-viewport min-h-screen bg-bg text-fg"
+      {/* O mesmo provider do portal: é ele que faz o botão de claro/escuro
+          existir, então o mockup mostra a central inteira, botão incluído.
+          A key remonta quando o provedor troca o padrão no formulário. */}
+      <PortalThemeProvider
+        key={String(merged.dark_mode_default)}
+        tenant={merged}
+        initialDark={merged.dark_mode_default}
       >
-        {screen === 'login' ? (
-          <LoginForm tenant={merged} />
-        ) : (
-          <main className="min-h-screen pt-11">
-            <Layout
-              tenant={merged}
-              customer={data.customer}
-              contract={data.contract}
-              plan={data.plan}
-              openInvoice={data.openInvoice}
-              recentInvoices={data.recentInvoices}
-            />
-            <TabBar t={portalTokens(merged, dark)} />
-          </main>
-        )}
-      </div>
+        {/* Levanta a barra de navegação acima do indicador de home do iPhone. */}
+        <style>{`.preview-viewport nav{padding-bottom:16px}`}</style>
+        <div className="preview-viewport">
+          <PreviewScreenView tenant={merged} data={data} screen={screen} />
+        </div>
+      </PortalThemeProvider>
     </PreviewContext.Provider>
   );
-}
-
-function pickLayout(layout: TenantLayout) {
-  if (layout === 'v2') return HomeV2;
-  if (layout === 'v3') return HomeV3;
-  return HomeV1;
 }

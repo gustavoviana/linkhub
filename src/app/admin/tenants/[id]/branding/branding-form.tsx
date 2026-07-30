@@ -9,6 +9,7 @@ import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/component
 import type { Tenant, TenantLayout } from '@/lib/supabase/types';
 import type { PreviewTheme } from '@/lib/tenant/preview-protocol';
 import { PhonePreview } from './phone-preview';
+import { StoreExport } from './store-export';
 import { cn } from '@/lib/utils';
 
 const COLOR_PRESETS = [
@@ -287,6 +288,10 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
         {saved && <span className="text-sm text-success">✓ Salvo</span>}
         {error && <span className="text-sm text-danger">{error}</span>}
       </div>
+
+      {/* Depois de salvar: as imagens saem com o que está no banco, não com
+          o que ainda está só no formulário. */}
+      <StoreExport tenantId={tenant.id} tenantName={tenant.name} slug={tenant.slug} />
       </div>
 
       <aside className="shrink-0 self-center xl:self-start xl:sticky xl:top-6">

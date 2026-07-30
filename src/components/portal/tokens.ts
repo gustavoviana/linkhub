@@ -42,7 +42,7 @@ function rgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-const MONO = 'ui-monospace, "SF Mono", Menlo, monospace';
+const MONO = 'var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace';
 
 export function portalTokens(tenant: Tenant, dark: boolean): PortalTokens {
   const accent = tenant.primary_color;

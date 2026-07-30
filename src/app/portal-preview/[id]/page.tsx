@@ -24,5 +24,7 @@ export default async function PortalPreviewPage({ params }: { params: Promise<{ 
   const tenant = asTenantOrNull(data);
   if (!tenant) notFound();
 
+  // Assinante de vitrine, fictício: é o mesmo que sai nos screenshots das
+  // lojas, e mandar cliente real para uma imagem pública seria vazamento.
   return <PreviewShell tenant={tenant} data={buildPreviewData(tenant)} />;
 }
