@@ -115,24 +115,30 @@ export function AccountScreen({
         >
           <Icon name="help" size={16} /> Falar com o suporte
         </Link>
-        <Link
-          href="/auth/logout"
-          style={{
-            height: 46,
-            borderRadius: 12,
-            background: 'transparent',
-            border: `1px solid ${t.border}`,
-            color: t.danger,
-            fontSize: 14,
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-          }}
-        >
-          <Icon name="logout" size={16} /> Sair da conta
-        </Link>
+        {/* Sair é POST — ver o comentário no shell do portal. */}
+        <form action="/auth/logout" method="post">
+          <button
+            type="submit"
+            style={{
+              width: '100%',
+              height: 46,
+              borderRadius: 12,
+              background: 'transparent',
+              border: `1px solid ${t.border}`,
+              color: t.danger,
+              fontSize: 14,
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              cursor: 'pointer',
+            }}
+          >
+            <Icon name="logout" size={16} /> Sair da conta
+          </button>
+        </form>
       </div>
     </div>
   );

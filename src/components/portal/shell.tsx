@@ -117,23 +117,29 @@ export function PortalSidebar({
             </div>
           </div>
         </div>
-        <Link
-          href="/auth/logout"
-          style={{
-            display: 'block',
-            width: '100%',
-            padding: 8,
-            borderRadius: 8,
-            border: `1px solid ${t.border}`,
-            background: t.surfaceSolid,
-            color: t.text2,
-            fontSize: 11,
-            fontWeight: 600,
-            textAlign: 'center',
-          }}
-        >
-          Sair da conta
-        </Link>
+        {/* Form, não link: sair é POST. Como <a>, o clique virava GET e o
+            assinante levava um 405 na cara em vez de sair da conta. */}
+        <form action="/auth/logout" method="post">
+          <button
+            type="submit"
+            style={{
+              display: 'block',
+              width: '100%',
+              padding: 8,
+              borderRadius: 8,
+              border: `1px solid ${t.border}`,
+              background: t.surfaceSolid,
+              color: t.text2,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              textAlign: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            Sair da conta
+          </button>
+        </form>
       </div>
     </aside>
   );
