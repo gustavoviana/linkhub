@@ -100,6 +100,28 @@ export function titleCaseName(value: string | null | undefined): string {
     .join(' ');
 }
 
+/**
+ * Situação do contrato em português.
+ *
+ * O banco guarda o enum em inglês e a central mostrava o valor cru: o
+ * assinante lia "suspended" na tela dele. Traduz o que conhecemos e devolve o
+ * resto como veio — status novo vindo de um ERP é melhor aparecer estranho do
+ * que sumir.
+ */
+const SITUACAO_CONTRATO: Record<string, string> = {
+  active: 'Ativo',
+  suspended: 'Suspenso',
+  cancelled: 'Cancelado',
+  canceled: 'Cancelado',
+  pending: 'Em ativação',
+};
+
+export function contractStatusLabel(status: string | null | undefined): string {
+  const chave = (status ?? '').trim().toLowerCase();
+  if (!chave) return '—';
+  return SITUACAO_CONTRATO[chave] ?? status!;
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

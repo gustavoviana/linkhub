@@ -5,7 +5,7 @@
 // pagamento no meio, cartões de conexão, atendimento e plano embaixo.
 
 import { NavLink as Link } from './nav-link';
-import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
+import { contractStatusLabel, formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
 import { ThemeToggle, usePortalTokens } from './theme';
@@ -45,7 +45,7 @@ export function WebDashboard(props: PortalScreenProps) {
         },
     {
       label: 'Status da conexão',
-      value: contract?.status === 'active' ? 'Online' : contract ? contract.status : '—',
+      value: contract?.status === 'active' ? 'Online' : contract ? contractStatusLabel(contract.status) : '—',
       sub: plan ? `${plan.down_mbps ?? '—'} ↓ / ${plan.up_mbps ?? '—'} ↑ Mbps` : 'Sem contrato ativo',
       icon: 'wifi',
       color: t.success,

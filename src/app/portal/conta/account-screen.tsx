@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import type { Tenant, Customer, Contract, Plan } from '@/lib/supabase/types';
-import { formatBRL, maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
+import { contractStatusLabel, formatBRL, maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, type PortalTokens } from '@/components/portal/tokens';
 import { usePortalTokens } from '@/components/portal/theme';
@@ -75,7 +75,7 @@ export function AccountScreen({
           <div style={{ display: 'flex', gap: 20, marginTop: 14 }}>
             {!!mensalidadeCents && <Field t={t} label="Mensalidade" value={formatBRL(mensalidadeCents)} />}
             {contract?.due_day && <Field t={t} label="Vencimento" value={`Dia ${contract.due_day}`} />}
-            {contract?.status && <Field t={t} label="Situação" value={contract.status === 'active' ? 'Ativo' : contract.status} />}
+            {contract?.status && <Field t={t} label="Situação" value={contractStatusLabel(contract.status)} />}
           </div>
         </Card>
       )}

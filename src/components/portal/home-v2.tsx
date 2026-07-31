@@ -4,7 +4,7 @@
 // gradiente da marca, densidade maior e hierarquia por contraste.
 
 import { NavLink as Link } from './nav-link';
-import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
+import { contractStatusLabel, formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
 import { ThemeToggle, usePortalTokens } from './theme';
@@ -156,7 +156,7 @@ export function HomeV2(props: PortalScreenProps) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <span style={{ width: 8, height: 8, borderRadius: 4, background: t.success }} />
               <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>
-                {contract.status === 'active' ? 'Conexão estável' : `Contrato ${contract.status}`}
+                {contract.status === 'active' ? 'Conexão estável' : `Contrato ${contractStatusLabel(contract.status).toLowerCase()}`}
               </div>
               {contract.pppoe_user && (
                 <span style={{ fontSize: 11, color: t.text2, fontFamily: t.mono }}>{contract.pppoe_user}</span>

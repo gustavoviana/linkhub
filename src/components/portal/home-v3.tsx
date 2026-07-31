@@ -5,7 +5,7 @@
 // tiles grandes 2×2 e cards de histórico encorpados.
 
 import { NavLink as Link } from './nav-link';
-import { formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
+import { contractStatusLabel, formatBRL, formatDate, formatMonthYear, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
 import { portalTokens, rgba, type PortalTokens } from './tokens';
 import { ThemeToggle, usePortalTokens } from './theme';
@@ -185,7 +185,7 @@ export function HomeV3(props: PortalScreenProps) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 15, fontWeight: 800 }}>
-                  {contract.status === 'active' ? 'Tudo certo! ✨' : `Contrato ${contract.status}`}
+                  {contract.status === 'active' ? 'Tudo certo! ✨' : `Contrato ${contractStatusLabel(contract.status).toLowerCase()}`}
                 </div>
                 <div style={{ fontSize: 12, color: t.text2 }}>
                   {contract.status === 'active' ? 'Sua conexão está ótima' : 'Fale com o suporte'}
