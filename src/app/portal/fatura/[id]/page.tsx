@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getAdapterForTenant } from '@/lib/erp';
 import { PortalShell } from '@/components/portal/shell';
 import { InvoiceScreen } from '@/components/portal/invoice-screen';
+import { pixQrDataUrl } from '@/lib/portal/pix-qr';
 import { InvoiceHeader } from './invoice-header';
 import type { Invoice, Plan } from '@/lib/supabase/types';
 
@@ -46,6 +47,13 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ id: 
     } catch (e) {
       console.error('[portal] pix lookup failed', e);
     }
+  }
+
+  // Sem imagem vinda do ERP, o QR sai daqui mesmo — o copia-e-cola é o próprio
+  // conteúdo dele. Não vai para o banco: é desenho, refaz em milissegundos, e
+  // guardar um data: URI de 8KB por fatura só engorda a tabela.
+  if (!record.pix_qr_code && record.pix_copy_paste) {
+    record = { ...record, pix_qr_code: pixQrDataUrl(record.pix_copy_paste) };
   }
 
   return (

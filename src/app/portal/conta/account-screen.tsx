@@ -14,11 +14,14 @@ export function AccountScreen({
   customer,
   contract,
   plan,
+  mensalidadeCents,
 }: {
   tenant: Tenant;
   customer: Customer;
   contract: Contract | null;
   plan: Plan | null;
+  /** Já resolvida no servidor: contrato, plano ou histórico de faturas. */
+  mensalidadeCents?: number | null;
 }) {
   const t = usePortalTokens(tenant);
 
@@ -62,11 +65,15 @@ export function AccountScreen({
         <Card t={t}>
           <CardTitle t={t} icon="wifi">Plano contratado</CardTitle>
           <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>{plan.name}</div>
-          <div style={{ fontSize: 13, color: t.text2, marginTop: 2 }}>
-            {plan.down_mbps ?? '—'} Mbps de download · {plan.up_mbps ?? '—'} Mbps de upload
-          </div>
+          {/* Velocidade só quando o ERP informa: "— Mbps de download" não diz
+              nada a ninguém e ainda parece defeito. */}
+          {(plan.down_mbps || plan.up_mbps) && (
+            <div style={{ fontSize: 13, color: t.text2, marginTop: 2 }}>
+              {plan.down_mbps ?? '—'} Mbps de download · {plan.up_mbps ?? '—'} Mbps de upload
+            </div>
+          )}
           <div style={{ display: 'flex', gap: 20, marginTop: 14 }}>
-            <Field t={t} label="Mensalidade" value={formatBRL(contract?.monthly_price_cents ?? plan.price_cents)} />
+            {!!mensalidadeCents && <Field t={t} label="Mensalidade" value={formatBRL(mensalidadeCents)} />}
             {contract?.due_day && <Field t={t} label="Vencimento" value={`Dia ${contract.due_day}`} />}
             {contract?.status && <Field t={t} label="Situação" value={contract.status === 'active' ? 'Ativo' : contract.status} />}
           </div>

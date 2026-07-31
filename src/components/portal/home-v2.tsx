@@ -182,8 +182,10 @@ export function HomeV2(props: PortalScreenProps) {
 
         <div style={{ margin: '0 18px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            {/* "Histórico" para contas que ainda vão vencer não descreve nada:
+                o título segue o que está na lista. */}
             <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: t.text2 }}>
-              Histórico
+              {recentInvoices.every((i) => i.status !== 'paid') ? 'Próximas faturas' : 'Histórico'}
             </span>
             <Link href="/fatura" style={{ fontSize: 12, color: t.accent2, fontWeight: 600 }}>
               Ver tudo →

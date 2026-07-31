@@ -212,7 +212,11 @@ export function HomeV3(props: PortalScreenProps) {
         </div>
 
         <div style={{ padding: '0 18px' }}>
-          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>Pagamentos recentes</div>
+          {/* Chamar de "pagamentos recentes" o que ainda vai vencer confunde:
+              o título segue o que está na lista. */}
+          <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 10 }}>
+            {recentInvoices.every((i) => i.status !== 'paid') ? 'Próximas faturas' : 'Pagamentos recentes'}
+          </div>
           {recentInvoices.length === 0 && (
             <div style={{ fontSize: 13, color: t.text2 }}>Nenhuma fatura por aqui ainda.</div>
           )}

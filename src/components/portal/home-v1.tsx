@@ -145,7 +145,11 @@ export function HomeV1(props: PortalScreenProps) {
               justifyContent: 'space-between',
             }}
           >
-            <span>Últimas faturas</span>
+            {/* Nada de "últimas" para contas que ainda vão vencer. O título
+                segue o que está na lista: só em aberto, são as próximas. */}
+            <span>
+              {recentInvoices.every((i) => i.status !== 'paid') ? 'Próximas faturas' : 'Últimas faturas'}
+            </span>
             <Link href="/fatura" style={{ color: t.accent }}>Ver todas</Link>
           </div>
           {recentInvoices.length === 0 && (

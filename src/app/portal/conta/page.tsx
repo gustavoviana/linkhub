@@ -3,6 +3,7 @@ import { requireTenant } from '@/lib/tenant/resolve';
 import { getCurrentCustomer } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PortalShell } from '@/components/portal/shell';
+import { mensalidadeDeFaturas } from '@/lib/portal/mensalidade';
 import { AccountScreen } from './account-screen';
 import type { Contract, Plan } from '@/lib/supabase/types';
 
@@ -27,6 +28,23 @@ export default async function ContaPage() {
   const contract = (data ?? null) as (Contract & { plans?: Plan | null }) | null;
   const plan = contract?.plans ?? null;
 
+  // Mensalidade: o ERP nem sempre manda (o SGP não manda). Quando falta, o
+  // valor sai do histórico de faturas — ver mensalidadeDeFaturas. A consulta
+  // extra só acontece nesse caso; quem tem o valor no contrato nem passa aqui.
+  let mensalidadeCents = contract?.monthly_price_cents || plan?.price_cents || null;
+  if (!mensalidadeCents && contract) {
+    const { data: ultimas } = await supabase
+      .from('invoices')
+      .select('amount_cents')
+      .eq('contract_id', contract.id)
+      .neq('status', 'cancelled')
+      .order('due_date', { ascending: false })
+      .limit(6);
+    mensalidadeCents = mensalidadeDeFaturas(
+      ((ultimas ?? []) as { amount_cents: number | null }[]).map((i) => i.amount_cents),
+    );
+  }
+
   return (
     <PortalShell tenant={tenant} customer={customer}>
       <AccountScreen
@@ -34,6 +52,7 @@ export default async function ContaPage() {
         customer={customer}
         contract={contract as Contract | null}
         plan={plan as Plan | null}
+        mensalidadeCents={mensalidadeCents}
       />
     </PortalShell>
   );

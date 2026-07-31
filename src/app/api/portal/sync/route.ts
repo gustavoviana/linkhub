@@ -23,14 +23,19 @@ export async function POST() {
   const admin = createAdminClient();
   const { data: contract } = await admin
     .from('contracts')
-    .select('id, external_id, last_synced_at')
+    .select('id, external_id, last_synced_at, monthly_price_cents')
     .eq('tenant_id', tenant.id)
     .eq('customer_id', customer.id)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const alvo = contract as { id: string; external_id: string | null; last_synced_at: string | null } | null;
+  const alvo = contract as {
+    id: string;
+    external_id: string | null;
+    last_synced_at: string | null;
+    monthly_price_cents: number | null;
+  } | null;
   if (!alvo?.external_id) return NextResponse.json({ atualizado: false });
 
   if (!precisaAtualizar(alvo.last_synced_at)) {

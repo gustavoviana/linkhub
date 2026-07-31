@@ -2,6 +2,7 @@ import 'server-only';
 import type { createAdminClient } from '@/lib/supabase/admin';
 import type { ErpAdapter } from '@/lib/erp';
 import type { Contract } from '@/lib/supabase/types';
+import { mensalidadeDeFaturas } from './mensalidade';
 
 // Atualização das faturas de um contrato a partir do ERP.
 //
@@ -29,7 +30,7 @@ export function precisaAtualizar(lastSyncedAt: string | null | undefined): boole
 export async function sincronizarFaturas(
   admin: Admin,
   tenantId: string,
-  contract: Pick<Contract, 'id' | 'external_id'>,
+  contract: Pick<Contract, 'id' | 'external_id'> & { monthly_price_cents?: number | null },
   adapter: ErpAdapter,
 ): Promise<number> {
   if (!contract.external_id) return 0;
@@ -64,7 +65,22 @@ export async function sincronizarFaturas(
 
     // Marca a passagem mesmo sem faturas: senão um contrato novo bate no ERP
     // a cada carregamento de tela, para sempre.
-    await admin.from('contracts').update({ last_synced_at: agora } as never).eq('id', contract.id);
+    const patch: Record<string, unknown> = { last_synced_at: agora };
+
+    // ERP que não informa o valor do plano (o SGP é um) deixava a mensalidade
+    // em R$ 0,00 na central. O histórico responde: é o valor que se repete.
+    if (!contract.monthly_price_cents) {
+      const mensalidade = mensalidadeDeFaturas(
+        fresh
+          .filter((i) => i.status !== 'cancelled')
+          .sort((a, b) => (b.dueDate ?? '').localeCompare(a.dueDate ?? ''))
+          .slice(0, 6)
+          .map((i) => i.amountCents),
+      );
+      if (mensalidade) patch.monthly_price_cents = mensalidade;
+    }
+
+    await admin.from('contracts').update(patch as never).eq('id', contract.id);
     return fresh.length;
   } catch (e) {
     console.error('[portal] invoice sync failed', e);
