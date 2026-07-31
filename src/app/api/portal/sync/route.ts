@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireTenant } from '@/lib/tenant/resolve';
-import { getCurrentCustomer } from '@/lib/auth/session';
+import { getPortalSession } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAdapterForTenant } from '@/lib/erp';
 import { precisaAtualizar, sincronizarFaturas } from '@/lib/portal/sync-invoices';
@@ -14,10 +13,10 @@ import { precisaAtualizar, sincronizarFaturas } from '@/lib/portal/sync-invoices
 export const dynamic = 'force-dynamic';
 
 export async function POST() {
-  const tenant = await requireTenant().catch(() => null);
-  if (!tenant) return new NextResponse('Not found', { status: 404 });
+  const sessao = await getPortalSession().catch(() => null);
+  if (!sessao) return new NextResponse('Not found', { status: 404 });
 
-  const customer = await getCurrentCustomer(tenant.id);
+  const { tenant, customer } = sessao;
   if (!customer) return new NextResponse('Unauthorized', { status: 401 });
 
   const admin = createAdminClient();

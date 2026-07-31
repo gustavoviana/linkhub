@@ -1,6 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { requireTenant } from '@/lib/tenant/resolve';
-import { getCurrentCustomer } from '@/lib/auth/session';
+import { getPortalSession } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAdapterForTenant } from '@/lib/erp';
 import { PortalShell } from '@/components/portal/shell';
@@ -12,8 +11,7 @@ import type { Invoice, Plan } from '@/lib/supabase/types';
 export const dynamic = 'force-dynamic';
 
 export default async function InvoiceDetail({ params }: { params: Promise<{ id: string }> }) {
-  const tenant = await requireTenant();
-  const customer = await getCurrentCustomer(tenant.id);
+  const { tenant, customer } = await getPortalSession();
   if (!customer) redirect('/login');
 
   const { id } = await params;

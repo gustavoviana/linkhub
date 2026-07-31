@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { requireTenant } from '@/lib/tenant/resolve';
-import { getCurrentCustomer } from '@/lib/auth/session';
+import { getPortalSession } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PortalShell } from '@/components/portal/shell';
 import { RefreshOnMount } from '@/components/portal/refresh-on-mount';
@@ -10,8 +9,7 @@ import type { Invoice } from '@/lib/supabase/types';
 export const dynamic = 'force-dynamic';
 
 export default async function FaturasList() {
-  const tenant = await requireTenant();
-  const customer = await getCurrentCustomer(tenant.id);
+  const { tenant, customer } = await getPortalSession();
   if (!customer) redirect('/login');
 
   // Uma consulta só: antes buscávamos os contratos e depois as faturas, duas

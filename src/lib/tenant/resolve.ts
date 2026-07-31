@@ -11,6 +11,30 @@ import type { Tenant } from '@/lib/supabase/types';
 // cache() deduplica por request: chamadas múltiplas no mesmo render só
 // batem no DB uma vez.
 
+/**
+ * Cache curto do provedor, por instância da função.
+ *
+ * O cadastro do provedor é o mesmo em toda tela da central e muda uma vez por
+ * semana, na melhor das hipóteses — mas custava uma viagem até o Supabase em
+ * cada navegação, antes de qualquer dado do assinante aparecer. Vinte segundos
+ * cobrem uma sessão inteira de troca de abas; é também o atraso máximo para o
+ * provedor ver no portal uma mudança de marca que acabou de salvar.
+ */
+const TENANT_TTL_MS = 20_000;
+const tenantCache = new Map<string, { tenant: Tenant | null; expira: number }>();
+
+async function lerTenant(chave: string, buscar: () => Promise<Tenant | null>): Promise<Tenant | null> {
+  const agora = Date.now();
+  const guardado = tenantCache.get(chave);
+  if (guardado && guardado.expira > agora) return guardado.tenant;
+
+  const tenant = await buscar();
+  // Guarda o "não existe" também: host errado não pode virar consulta a cada
+  // requisição de quem estiver batendo nele.
+  tenantCache.set(chave, { tenant, expira: agora + TENANT_TTL_MS });
+  return tenant;
+}
+
 export const getCurrentTenant = cache(async (): Promise<Tenant | null> => {
   const h = await headers();
   const slug = h.get('x-tenant-slug');
@@ -20,21 +44,25 @@ export const getCurrentTenant = cache(async (): Promise<Tenant | null> => {
 
   if (slug.startsWith('__custom__:')) {
     const domain = slug.slice('__custom__:'.length);
+    return lerTenant(slug, async () => {
+      const { data } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('custom_domain', domain)
+        .eq('custom_domain_verified', true)
+        .single();
+      return (data ?? null) as Tenant | null;
+    });
+  }
+
+  return lerTenant(`slug:${slug}`, async () => {
     const { data } = await supabase
       .from('tenants')
       .select('*')
-      .eq('custom_domain', domain)
-      .eq('custom_domain_verified', true)
+      .eq('slug', slug)
       .single();
     return (data ?? null) as Tenant | null;
-  }
-
-  const { data } = await supabase
-    .from('tenants')
-    .select('*')
-    .eq('slug', slug)
-    .single();
-  return (data ?? null) as Tenant | null;
+  });
 });
 
 /**

@@ -1,14 +1,23 @@
 import 'server-only';
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { requireTenant } from '@/lib/tenant/resolve';
 import type { Tenant, TenantAdmin, Customer, AdminRole } from '@/lib/supabase/types';
 
-export async function getUser() {
+/**
+ * Usuário da sessão, uma vez por requisição.
+ *
+ * `getUser()` do Supabase valida o token no servidor deles — é rede, não
+ * leitura de cookie. Sem o cache(), a mesma pergunta ia duas ou três vezes no
+ * mesmo render, e cada ida custa a viagem inteira.
+ */
+export const getUser = cache(async () => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
-}
+});
 
 export async function requireUser() {
   const user = await getUser();
@@ -49,9 +58,9 @@ export async function requireTenantAdmin(tenantId: string, minRole: AdminRole = 
 }
 
 export async function getCurrentCustomer(tenantId: string): Promise<Customer | null> {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getUser();
   if (!user) return null;
+  const supabase = await createClient();
   const { data } = await supabase
     .from('customers')
     .select('*')
@@ -59,4 +68,19 @@ export async function getCurrentCustomer(tenantId: string): Promise<Customer | n
     .eq('user_id', user.id)
     .maybeSingle();
   return (data ?? null) as Customer | null;
+}
+
+/**
+ * Provedor e assinante da requisição — o começo de toda tela da central.
+ *
+ * As duas primeiras perguntas não dependem uma da outra: qual provedor é este
+ * host, e quem está logado. Em fila, custavam duas viagens até o Supabase antes
+ * de a página buscar qualquer dado; juntas, custam uma. Só a busca do cadastro
+ * do assinante precisa esperar, porque depende das duas respostas.
+ */
+export async function getPortalSession(): Promise<{ tenant: Tenant; customer: Customer | null }> {
+  const [tenant] = await Promise.all([requireTenant(), getUser()]);
+  // getUser() já resolveu acima e está em cache nesta requisição.
+  const customer = await getCurrentCustomer(tenant.id);
+  return { tenant, customer };
 }

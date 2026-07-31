@@ -16,6 +16,12 @@ export interface PortalScreenProps {
   recentInvoices: Invoice[];
   connection?: ErpConnection | null;
   usage?: ErpUsagePoint[];
+  /**
+   * As faturas deste contrato ainda não foram buscadas no ERP nenhuma vez.
+   * Sem isso, o primeiro acesso dizia "tudo em dia" para quem tinha conta
+   * vencida — não sabíamos de nada e afirmávamos o melhor caso.
+   */
+  aguardandoFaturas?: boolean;
 }
 
 /** "vencida em 10/07" / "vence em 4 dias" — sempre com a data original. */
@@ -203,6 +209,7 @@ export function TabBar({ t, path }: { t: PortalTokens; path?: string }) {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch
               aria-label={tab.label}
               aria-current={active ? 'page' : undefined}
               style={{
@@ -250,6 +257,7 @@ export function TabBar({ t, path }: { t: PortalTokens; path?: string }) {
             <Link
               key={tab.href}
               href={tab.href}
+              prefetch
               aria-current={active ? 'page' : undefined}
               style={{
                 flex: 1,
@@ -296,6 +304,7 @@ export function TabBar({ t, path }: { t: PortalTokens; path?: string }) {
           <Link
             key={tab.href}
             href={tab.href}
+            prefetch
             aria-current={active ? 'page' : undefined}
             style={{
               display: 'flex',

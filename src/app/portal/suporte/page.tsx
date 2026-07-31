@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { requireTenant } from '@/lib/tenant/resolve';
-import { getCurrentCustomer } from '@/lib/auth/session';
+import { getPortalSession } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PortalShell } from '@/components/portal/shell';
 import { SupportScreen } from './support-screen';
@@ -9,8 +8,7 @@ import type { SupportTicket } from '@/lib/supabase/types';
 export const dynamic = 'force-dynamic';
 
 export default async function SuportePage() {
-  const tenant = await requireTenant();
-  const customer = await getCurrentCustomer(tenant.id);
+  const { tenant, customer } = await getPortalSession();
   if (!customer) redirect('/login');
 
   const supabase = createAdminClient();

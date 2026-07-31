@@ -112,7 +112,7 @@ export function HomeV1(props: PortalScreenProps) {
             </div>
           </Link>
         ) : (
-          <NoOpenInvoice t={t} />
+          <NoOpenInvoice t={t} aguardando={props.aguardandoFaturas} />
         )}
 
         <div style={{ padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
@@ -270,15 +270,25 @@ function Stat({
   );
 }
 
-export function NoOpenInvoice({ t }: { t: ReturnType<typeof portalTokens> }) {
+export function NoOpenInvoice({
+  t,
+  aguardando = false,
+}: {
+  t: ReturnType<typeof portalTokens>;
+  aguardando?: boolean;
+}) {
+  // Ainda não perguntamos ao ERP: dizer "tudo em dia" aqui seria afirmar o que
+  // não sabemos, e para quem tem conta vencida é a pior mentira possível.
+  const cor = aguardando ? t.text3 : t.success;
+
   return (
     <div
       style={{
         margin: '20px 20px 16px',
         padding: 22,
         borderRadius: t.radius,
-        background: t.successSoft,
-        border: `1px solid ${t.success}33`,
+        background: aguardando ? t.surface : t.successSoft,
+        border: `1px solid ${aguardando ? t.border : `${t.success}33`}`,
         display: 'flex',
         alignItems: 'center',
         gap: 14,
@@ -289,18 +299,24 @@ export function NoOpenInvoice({ t }: { t: ReturnType<typeof portalTokens> }) {
           width: 40,
           height: 40,
           borderRadius: 12,
-          background: t.success,
+          background: cor,
           color: '#fff',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Icon name="check" size={20} />
+        <Icon name={aguardando ? 'clock' : 'check'} size={20} />
       </div>
       <div>
-        <div style={{ fontSize: 15, fontWeight: 700, color: t.success }}>Tudo em dia</div>
-        <div style={{ fontSize: 13, color: t.text2 }}>Você não tem faturas em aberto.</div>
+        <div style={{ fontSize: 15, fontWeight: 700, color: cor }}>
+          {aguardando ? 'Buscando suas faturas' : 'Tudo em dia'}
+        </div>
+        <div style={{ fontSize: 13, color: t.text2 }}>
+          {aguardando
+            ? 'Estamos consultando o sistema do provedor. Já aparece aqui.'
+            : 'Você não tem faturas em aberto.'}
+        </div>
       </div>
     </div>
   );

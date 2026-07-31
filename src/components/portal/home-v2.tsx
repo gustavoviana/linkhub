@@ -140,7 +140,7 @@ export function HomeV2(props: PortalScreenProps) {
             </div>
           </Link>
         ) : (
-          <NoOpenInvoice t={t} />
+          <NoOpenInvoice t={t} aguardando={props.aguardandoFaturas} />
         )}
 
         <div style={{ display: 'flex', gap: 10, padding: '0 18px 16px', overflowX: 'auto' }} className="scrollbar-hide">

@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
-import { requireTenant } from '@/lib/tenant/resolve';
-import { getCurrentCustomer } from '@/lib/auth/session';
+import { getPortalSession } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAdapterForTenant } from '@/lib/erp';
 import { PortalShell } from '@/components/portal/shell';
@@ -77,8 +76,7 @@ async function ensurePlanFromContract(
 }
 
 export default async function PortalHome() {
-  const tenant = await requireTenant();
-  const customer = await getCurrentCustomer(tenant.id);
+  const { tenant, customer } = await getPortalSession();
   if (!customer) redirect('/login');
 
   const supabase = createAdminClient();
@@ -109,7 +107,11 @@ export default async function PortalHome() {
             monthly_price_cents: c.monthlyPriceCents,
             installation_address: c.installationAddress,
             activated_at: c.activatedAt,
-            last_synced_at: new Date().toISOString(),
+            // Sem last_synced_at aqui de propósito: o contrato acabou de ser
+            // descoberto, as faturas dele nunca foram buscadas. Marcá-lo como
+            // sincronizado no nascimento fazia a atualização de fundo se achar
+            // em dia e não rodar pelos 5 minutos seguintes — foi o que deixou
+            // a central dizendo "tudo em dia" para quem tinha conta vencida.
           },
           { onConflict: 'tenant_id,external_id' },
         );
@@ -142,6 +144,9 @@ export default async function PortalHome() {
   // que precisa aparecer, e não a próxima a vencer.
   let openInvoice: Invoice | null = null;
   let recentInvoices: Invoice[] = [];
+  // Enquanto o contrato nunca sincronizou e não há fatura nenhuma no banco,
+  // não sabemos se o assinante deve algo — e a tela não pode dizer que sabe.
+  let aguardandoFaturas = false;
   if (contract) {
     const carregarFaturas = async () => {
       const [abertas, pagas] = await Promise.all([
@@ -186,6 +191,7 @@ export default async function PortalHome() {
     // que ela vira histórico; o resto está em "Ver todas".
     const restantes = abertas.slice(1);
     recentInvoices = restantes.length ? restantes : pagas;
+    aguardandoFaturas = !abertas.length && !pagas.length && !contract.last_synced_at;
   }
 
   // Conexão e consumo são ao vivo: nada disso fica no nosso banco, é sempre
@@ -218,6 +224,7 @@ export default async function PortalHome() {
     recentInvoices,
     connection,
     usage,
+    aguardandoFaturas,
   };
 
   const Home = tenant.layout === 'v2' ? HomeV2 : tenant.layout === 'v3' ? HomeV3 : HomeV1;

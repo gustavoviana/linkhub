@@ -70,6 +70,7 @@ export function PortalSidebar({
             <Link
               key={item.href}
               href={item.href}
+              prefetch
               aria-current={active ? 'page' : undefined}
               style={{
                 display: 'flex',
