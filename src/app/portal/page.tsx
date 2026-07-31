@@ -151,7 +151,9 @@ export default async function PortalHome() {
           .eq('contract_id', contract.id)
           .in('status', ['open', 'overdue', 'partial'])
           .order('due_date', { ascending: true })
-          .limit(6),
+          // Todas as em aberto: cortar em seis escondia conta a pagar de quem
+          // está com o carnê do ano inteiro em atraso.
+          .limit(24),
         supabase
           .from('invoices')
           .select('*')
@@ -177,7 +179,13 @@ export default async function PortalHome() {
     }
 
     openInvoice = abertas[0] ?? null;
-    recentInvoices = [...abertas.slice(1), ...pagas].slice(0, 5);
+
+    // A lista embaixo do destaque é o que ainda falta pagar — todas elas, sem
+    // corte, e sem misturar pagas no meio (era o que fazia a lista de contas a
+    // vencer se chamar "últimas faturas"). Só quando não há nada em aberto é
+    // que ela vira histórico; o resto está em "Ver todas".
+    const restantes = abertas.slice(1);
+    recentInvoices = restantes.length ? restantes : pagas;
   }
 
   // Conexão e consumo são ao vivo: nada disso fica no nosso banco, é sempre

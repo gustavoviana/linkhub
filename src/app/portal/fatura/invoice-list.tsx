@@ -12,15 +12,20 @@ import { invoiceStanding } from '@/components/portal/ui';
 export function InvoiceList({ tenant, invoices }: { tenant: Tenant; invoices: Invoice[] }) {
   const t = usePortalTokens(tenant);
 
-  // Em aberto: vencimento mais próximo primeiro — é o que o assinante
-  // precisa resolver. Pagas: as três últimas bastam para ele se situar.
+  // Em aberto: vencimento mais próximo primeiro, e todas — se o assinante tem
+  // seis contas a pagar, ele precisa ver as seis.
   const open = invoices
     .filter((i) => i.status !== 'paid' && i.status !== 'cancelled')
     .sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  // Pagas: só pagas mesmo. Antes entrava tudo que não estava em aberto, e as
+  // canceladas do SGP apareciam aqui em vermelho, com "vencida há 46 dias" —
+  // uma fatura anulada cobrando o cliente na tela de pagamentos feitos. Elas
+  // não são cobrança nem comprovante: ficam fora das duas listas.
   const closed = invoices
-    .filter((i) => i.status === 'paid' || i.status === 'cancelled')
+    .filter((i) => i.status === 'paid')
     .sort((a, b) => b.due_date.localeCompare(a.due_date))
-    .slice(0, 3);
+    .slice(0, 6);
 
   return (
     <div>
@@ -88,10 +93,12 @@ function Group({
 
 function Row({ t, invoice }: { t: ReturnType<typeof portalTokens>; invoice: Invoice }) {
   const paid = invoice.status === 'paid';
+  const cancelled = invoice.status === 'cancelled';
   const { overdue, label } = invoiceStanding(invoice);
-  const color = paid ? t.success : overdue ? t.danger : t.accent;
-  // "vencida há 3 dias" diz mais que "em atraso".
-  const standing = paid ? 'Paga' : label;
+  const color = paid ? t.success : cancelled ? t.text3 : overdue ? t.danger : t.accent;
+  // "vencida há 3 dias" diz mais que "em atraso". Cancelada nunca venceu nada:
+  // se uma escapar para alguma lista, que não apareça cobrando.
+  const standing = paid ? 'Paga' : cancelled ? 'Cancelada' : label;
 
   return (
     <Link
