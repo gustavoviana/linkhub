@@ -19,6 +19,12 @@ Cole o SQL no **SQL Editor** do projeto Supabase, na ordem:
 |---|---|
 | `all_in_one.sql` | instalação nova, do zero |
 | `migrations/20260727_004_fix_rls_security.sql` | já aplicado em produção em 27/07/2026 |
+| `migrations/20260727_005_portal_auth_mode.sql` | já aplicado (coluna `portal_require_password` existe) |
+| `migrations/20260729_006_tenant_apps.sql` | já aplicado (tabela `tenant_apps` existe) |
+| `migrations/20260731_007_logo_dark.sql` | **pendente** — sem ele, a logo do modo escuro não salva |
+
+O estado de cada um foi conferido consultando as colunas em produção, não pela
+data do arquivo.
 
 O `all_in_one.sql` já nasce com as correções do `004` embutidas — as duas
 rotas levam ao mesmo estado final.

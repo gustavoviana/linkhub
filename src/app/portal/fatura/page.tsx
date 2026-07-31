@@ -3,6 +3,7 @@ import { requireTenant } from '@/lib/tenant/resolve';
 import { getCurrentCustomer } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { PortalShell } from '@/components/portal/shell';
+import { RefreshOnMount } from '@/components/portal/refresh-on-mount';
 import { InvoiceList } from './invoice-list';
 import type { Invoice } from '@/lib/supabase/types';
 
@@ -13,23 +14,26 @@ export default async function FaturasList() {
   const customer = await getCurrentCustomer(tenant.id);
   if (!customer) redirect('/login');
 
+  // Uma consulta só: antes buscávamos os contratos e depois as faturas, duas
+  // voltas de rede em fila. O `contracts!inner` filtra pelo dono direto no
+  // banco — o vínculo continua sendo o mesmo, só não volta pela metade do
+  // caminho para perguntar.
   const supabase = createAdminClient();
-  const { data: contracts } = await supabase
-    .from('contracts').select('id').eq('customer_id', customer.id);
-  const contractIds = (contracts ?? []).map((c) => c.id);
+  const { data: rows } = await supabase
+    .from('invoices')
+    .select('*, contracts!inner(customer_id)')
+    .eq('contracts.customer_id', customer.id)
+    .order('due_date', { ascending: false })
+    .limit(36);
 
-  const { data: invoices } = contractIds.length
-    ? await supabase
-        .from('invoices')
-        .select('*')
-        .in('contract_id', contractIds)
-        .order('due_date', { ascending: false })
-        .limit(36)
-    : { data: [] as Invoice[] };
+  const invoices = ((rows ?? []) as (Invoice & { contracts?: unknown })[]).map(
+    ({ contracts: _vinculo, ...invoice }) => invoice as Invoice,
+  );
 
   return (
     <PortalShell tenant={tenant} customer={customer}>
-      <InvoiceList tenant={tenant} invoices={(invoices ?? []) as Invoice[]} />
+      <RefreshOnMount />
+      <InvoiceList tenant={tenant} invoices={invoices} />
     </PortalShell>
   );
 }

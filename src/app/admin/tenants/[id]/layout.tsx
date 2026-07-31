@@ -43,17 +43,25 @@ export default async function TenantLayout({
       <header className="border-b border-border bg-bg-2">
         <div className="px-8 py-6">
           <div className="flex items-start gap-4">
-            <div
-              className="w-12 h-12 rounded-md flex items-center justify-center font-bold text-white shrink-0"
-              style={{ background: tenant.primary_color }}
-            >
-              {tenant.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={tenant.logo_url} alt={tenant.name} className="w-full h-full object-cover rounded-md" />
-              ) : (
-                tenant.name[0]
-              )}
-            </div>
+            {/* Logo solta, na horizontal: o quadrado colorido que existia aqui
+                recortava a marca no meio (object-cover) e emoldurava uma arte
+                que já vem pronta. O quadrado sobrou só como retrato de quem
+                ainda não enviou logo. */}
+            {tenant.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={tenant.logo_url}
+                alt={tenant.name}
+                className="h-12 w-auto max-w-[240px] object-contain shrink-0"
+              />
+            ) : (
+              <div
+                className="w-12 h-12 rounded-md flex items-center justify-center font-bold text-white shrink-0"
+                style={{ background: tenant.primary_color }}
+              >
+                {tenant.name[0]}
+              </div>
+            )}
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <h1 className="text-xl font-bold">{tenant.name}</h1>

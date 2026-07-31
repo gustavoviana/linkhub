@@ -27,6 +27,8 @@ const LAYOUTS: { id: TenantLayout; name: string; desc: string }[] = [
   { id: 'v3', name: 'Friendly Bold', desc: 'Bordas arredondadas, cores fortes, tom amigável.' },
 ];
 
+type AssetKey = 'logo_url' | 'logo_dark_url' | 'favicon_url';
+
 export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -36,19 +38,20 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     dark_mode_default: tenant.dark_mode_default,
     layout: tenant.layout as TenantLayout,
     logo_url: tenant.logo_url ?? '',
+    logo_dark_url: tenant.logo_dark_url ?? '',
     favicon_url: tenant.favicon_url ?? '',
     support_phone: tenant.support_phone ?? '',
     support_whatsapp: tenant.support_whatsapp ?? '',
     support_email: tenant.support_email ?? '',
   });
-  const [uploading, setUploading] = useState<'logo_url' | 'favicon_url' | null>(null);
+  const [uploading, setUploading] = useState<AssetKey | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const MAX_ASSET_BYTES = 1024 * 1024;
 
-  async function uploadAsset(file: File, field: 'logo_url' | 'favicon_url') {
+  async function uploadAsset(file: File, field: AssetKey) {
     if (file.size > MAX_ASSET_BYTES) {
       setError('Arquivo acima de 1MB. Escolha uma imagem menor.');
       return;
@@ -57,7 +60,7 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     setError(null);
     const supabase = createClient();
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png';
-    const kind = field === 'logo_url' ? 'logo' : 'favicon';
+    const kind = field === 'logo_url' ? 'logo' : field === 'logo_dark_url' ? 'logo-dark' : 'favicon';
     const path = `tenants/${tenant.id}/${kind}-${Date.now()}.${ext}`;
     const { error: upErr } = await supabase.storage
       .from('tenant-assets')
@@ -76,6 +79,7 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   const previewTheme: PreviewTheme = {
     name: form.name || tenant.name,
     logo_url: form.logo_url || null,
+    logo_dark_url: form.logo_dark_url || null,
     primary_color: form.primary_color,
     accent_color: form.accent_color,
     dark_mode_default: form.dark_mode_default,
@@ -98,12 +102,28 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
       dark_mode_default: form.dark_mode_default,
       layout: form.layout,
       logo_url: form.logo_url || null,
+      logo_dark_url: form.logo_dark_url || null,
       favicon_url: form.favicon_url || null,
       support_phone: form.support_phone || null,
       support_whatsapp: form.support_whatsapp || null,
       support_email: form.support_email || null,
     };
-    const { error } = await (supabase.from('tenants').update(update as never)).eq('id', tenant.id);
+    let { error } = await (supabase.from('tenants').update(update as never)).eq('id', tenant.id);
+
+    // Banco ainda sem a migração 007: em vez de perder o que o provedor
+    // acabou de ajustar, salva o resto e diz o que ficou de fora.
+    if (error && /logo_dark_url/.test(error.message)) {
+      const { logo_dark_url: _pendente, ...semLogoDark } = update;
+      ({ error } = await (supabase.from('tenants').update(semLogoDark as never)).eq('id', tenant.id));
+      if (!error) {
+        setSaving(false);
+        setSaved(true);
+        setError('Tudo salvo, menos a logo do modo escuro: falta rodar a migração 007 no banco.');
+        router.refresh();
+        return;
+      }
+    }
+
     setSaving(false);
     if (error) {
       setError(error.message);
@@ -139,6 +159,18 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
               fallbackColor={form.primary_color}
               onPick={(file) => uploadAsset(file, 'logo_url')}
               onClear={() => setForm({ ...form, logo_url: '' })}
+            />
+            <AssetField
+              id="logo-dark-upload"
+              label="Logo para o modo escuro"
+              hint="Opcional. Use a versão clara da sua marca — a escura some no fundo escuro. Sem ela, vale a logo normal nos dois temas."
+              value={form.logo_dark_url}
+              uploading={uploading === 'logo_dark_url'}
+              fallback={form.name[0]?.toUpperCase() ?? '?'}
+              fallbackColor="#111318"
+              dark
+              onPick={(file) => uploadAsset(file, 'logo_dark_url')}
+              onClear={() => setForm({ ...form, logo_dark_url: '' })}
             />
             <AssetField
               id="favicon-upload"
@@ -310,6 +342,7 @@ function AssetField({
   uploading,
   fallback,
   fallbackColor,
+  dark = false,
   onPick,
   onClear,
 }: {
@@ -320,6 +353,8 @@ function AssetField({
   uploading: boolean;
   fallback: string;
   fallbackColor: string;
+  /** Mostra a miniatura sobre fundo escuro — é onde essa arte vai aparecer. */
+  dark?: boolean;
   onPick: (file: File) => void;
   onClear: () => void;
 }) {
@@ -327,7 +362,12 @@ function AssetField({
     <div>
       <Label>{label}</Label>
       <div className="flex items-start gap-3">
-        <div className="w-16 h-16 shrink-0 rounded-md bg-bg-3 border border-border flex items-center justify-center overflow-hidden">
+        <div
+          className={cn(
+            'w-16 h-16 shrink-0 rounded-md border border-border flex items-center justify-center overflow-hidden',
+            dark ? 'bg-[#111318]' : 'bg-bg-3',
+          )}
+        >
           {value ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={value} alt={label} className="w-full h-full object-contain" />

@@ -8,6 +8,7 @@ export type PreviewTheme = Pick<
   Tenant,
   | 'name'
   | 'logo_url'
+  | 'logo_dark_url'
   | 'primary_color'
   | 'accent_color'
   | 'dark_mode_default'

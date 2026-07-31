@@ -91,11 +91,15 @@ export function BrandMark({
   size?: number;
   showName?: boolean;
 }) {
-  if (tenant.logo_url) {
+  // No escuro vale a versão clara da marca, quando o provedor enviou uma —
+  // logo escura em fundo escuro simplesmente some. Sem ela, segue a de sempre.
+  const logo = (t.dark && tenant.logo_dark_url) || tenant.logo_url;
+
+  if (logo) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={tenant.logo_url}
+        src={logo}
         alt={tenant.name}
         style={{ height: size, maxWidth: size * 5, objectFit: 'contain' }}
       />

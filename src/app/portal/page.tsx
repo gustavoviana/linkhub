@@ -4,6 +4,8 @@ import { getCurrentCustomer } from '@/lib/auth/session';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getAdapterForTenant } from '@/lib/erp';
 import { PortalShell } from '@/components/portal/shell';
+import { RefreshOnMount } from '@/components/portal/refresh-on-mount';
+import { sincronizarFaturas } from '@/lib/portal/sync-invoices';
 import { HomeV1 } from '@/components/portal/home-v1';
 import { HomeV2 } from '@/components/portal/home-v2';
 import { HomeV3 } from '@/components/portal/home-v3';
@@ -83,9 +85,11 @@ export default async function PortalHome() {
   const adapter = getAdapterForTenant(tenant);
 
   // 1. Contratos: tenta DB primeiro, cai pro ERP se não tiver.
+  // O plano vem junto no mesmo pedido (`plans(*)`): buscar depois, pelo
+  // plan_id, era mais uma volta de rede inteira só para ler uma linha.
   let { data: contracts } = await supabase
     .from('contracts')
-    .select('*')
+    .select('*, plans(*)')
     .eq('tenant_id', tenant.id)
     .eq('customer_id', customer.id)
     .order('created_at', { ascending: false });
@@ -111,7 +115,7 @@ export default async function PortalHome() {
         );
       }
       ({ data: contracts } = await supabase
-        .from('contracts').select('*')
+        .from('contracts').select('*, plans(*)')
         .eq('tenant_id', tenant.id).eq('customer_id', customer.id));
     } catch (e) {
       console.error('[portal] contract sync failed', e);
@@ -124,90 +128,56 @@ export default async function PortalHome() {
   // "MARAUNET-PLANO-500X500 2026"). Se ele ainda não existe no catálogo,
   // materializamos aqui — senão a central mostraria "sem plano vinculado"
   // com o plano na cara do cliente lá no sistema do provedor.
-  let plan: Plan | null = null;
-  if (contract?.plan_id) {
-    const { data } = await supabase.from('plans').select('*').eq('id', contract.plan_id).single();
-    plan = (data ?? null) as Plan | null;
-  }
+  let plan: Plan | null =
+    ((contract as (Contract & { plans?: Plan | null }) | null)?.plans as Plan | null) ?? null;
   if (!plan && contract?.external_id && customer.external_id) {
     plan = await ensurePlanFromContract(supabase, tenant, contract, adapter, customer.external_id);
   }
 
-  // 2. Faturas — uma gravação só, com todas de uma vez. Gravar uma a uma
-  // custava ~15s de carregamento com 60 faturas, porque cada upsert é uma
-  // viagem até o banco.
+  // 2. Faturas.
+  //
+  // As duas consultas saem juntas, não em fila: são independentes e cada ida ao
+  // banco custa uma volta de rede inteira. A fatura em destaque é a primeira das
+  // em aberto — a mais antiga ainda não paga, porque se há atraso é a atrasada
+  // que precisa aparecer, e não a próxima a vencer.
   let openInvoice: Invoice | null = null;
   let recentInvoices: Invoice[] = [];
-  if (contract?.external_id) {
-    const syncedAt = contract.last_synced_at ? new Date(contract.last_synced_at).getTime() : 0;
-    const stale = Date.now() - syncedAt > 5 * 60_000;
+  if (contract) {
+    const carregarFaturas = async () => {
+      const [abertas, pagas] = await Promise.all([
+        supabase
+          .from('invoices')
+          .select('*')
+          .eq('contract_id', contract.id)
+          .in('status', ['open', 'overdue', 'partial'])
+          .order('due_date', { ascending: true })
+          .limit(6),
+        supabase
+          .from('invoices')
+          .select('*')
+          .eq('contract_id', contract.id)
+          .eq('status', 'paid')
+          .order('due_date', { ascending: false })
+          .limit(3),
+      ]);
+      return {
+        abertas: (abertas.data ?? []) as Invoice[],
+        pagas: (pagas.data ?? []) as Invoice[],
+      };
+    };
 
-    if (stale) {
-      try {
-        const fresh = await adapter.listInvoicesByContract(contract.external_id);
-        if (fresh.length) {
-          const now = new Date().toISOString();
-          await supabase.from('invoices').upsert(
-            fresh.map((inv) => ({
-              tenant_id: tenant.id,
-              contract_id: contract.id,
-              external_id: inv.externalId,
-              reference_month: inv.referenceMonth,
-              due_date: inv.dueDate,
-              amount_cents: inv.amountCents,
-              status: inv.status,
-              pix_copy_paste: inv.pixCopyPaste,
-              pix_qr_code: inv.pixQrCode,
-              boleto_line: inv.boletoLine,
-              boleto_pdf_url: inv.boletoPdfUrl,
-              nfe_url: inv.nfeUrl,
-              paid_at: inv.paidAt,
-              paid_amount_cents: inv.paidAmountCents,
-              paid_method: inv.paidMethod,
-              last_synced_at: now,
-            })) as never,
-            { onConflict: 'tenant_id,external_id' },
-          );
-          await supabase.from('contracts').update({ last_synced_at: now } as never).eq('id', contract.id);
-        }
-      } catch (e) {
-        console.error('[portal] invoice sync failed', e);
-      }
+    let { abertas, pagas } = await carregarFaturas();
+
+    // Primeira visita do assinante: sem nada no banco a central sairia vazia,
+    // então aqui vale esperar o ERP. Nas outras vezes quem atualiza é o
+    // <RefreshOnMount/>, depois da tela pintada.
+    if (!abertas.length && !pagas.length && contract.external_id) {
+      await sincronizarFaturas(supabase, tenant.id, contract, adapter);
+      ({ abertas, pagas } = await carregarFaturas());
     }
 
-    // A fatura em destaque é a mais antiga ainda não paga: se há atraso, é a
-    // atrasada que precisa aparecer, não a próxima a vencer.
-    const { data: openRows } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('contract_id', contract.id)
-      .in('status', ['open', 'overdue', 'partial'])
-      .order('due_date', { ascending: true })
-      .limit(1);
-    openInvoice = openRows?.[0] ?? null;
-
-    // Histórico: as próximas a vencer primeiro (setembro, outubro…), depois
-    // as pagas mais recentes. A fatura em destaque não se repete na lista.
-    const { data: upcoming } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('contract_id', contract.id)
-      .in('status', ['open', 'overdue', 'partial'])
-      .order('due_date', { ascending: true })
-      .limit(6);
-
-    const { data: settled } = await supabase
-      .from('invoices')
-      .select('*')
-      .eq('contract_id', contract.id)
-      .eq('status', 'paid')
-      .order('due_date', { ascending: false })
-      .limit(3);
-
-    recentInvoices = [
-      ...(upcoming ?? []).filter((i) => i.id !== openInvoice?.id),
-      ...(settled ?? []),
-    ].slice(0, 5);
+    openInvoice = abertas[0] ?? null;
+    recentInvoices = [...abertas.slice(1), ...pagas].slice(0, 5);
   }
 
   // Conexão e consumo são ao vivo: nada disso fica no nosso banco, é sempre
@@ -246,6 +216,7 @@ export default async function PortalHome() {
 
   return (
     <PortalShell tenant={tenant} customer={customer} wide>
+      <RefreshOnMount />
       {/* Celular: um dos três layouts escolhidos pelo provedor. */}
       <div className="lg:hidden">
         <Home {...props} />

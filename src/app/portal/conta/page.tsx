@@ -13,26 +13,27 @@ export default async function ContaPage() {
   const customer = await getCurrentCustomer(tenant.id);
   if (!customer) redirect('/login');
 
+  // Contrato e plano na mesma ida ao banco — ler o plano depois, pelo plan_id,
+  // era uma volta de rede a mais para uma linha só.
   const supabase = createAdminClient();
-  const { data: contract } = await supabase
+  const { data } = await supabase
     .from('contracts')
-    .select('*')
+    .select('*, plans(*)')
     .eq('customer_id', customer.id)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  const { data: plan } = contract?.plan_id
-    ? await supabase.from('plans').select('*').eq('id', contract.plan_id).single()
-    : { data: null as Plan | null };
+  const contract = (data ?? null) as (Contract & { plans?: Plan | null }) | null;
+  const plan = contract?.plans ?? null;
 
   return (
     <PortalShell tenant={tenant} customer={customer}>
       <AccountScreen
         tenant={tenant}
         customer={customer}
-        contract={(contract ?? null) as Contract | null}
-        plan={(plan ?? null) as Plan | null}
+        contract={contract as Contract | null}
+        plan={plan as Plan | null}
       />
     </PortalShell>
   );
