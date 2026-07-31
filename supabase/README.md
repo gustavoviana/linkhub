@@ -22,6 +22,7 @@ Cole o SQL no **SQL Editor** do projeto Supabase, na ordem:
 | `migrations/20260727_005_portal_auth_mode.sql` | já aplicado (coluna `portal_require_password` existe) |
 | `migrations/20260729_006_tenant_apps.sql` | já aplicado (tabela `tenant_apps` existe) |
 | `migrations/20260731_007_logo_dark.sql` | **pendente** — sem ele, a logo do modo escuro não salva |
+| `migrations/20260731_008_login_screen.sql` | **pendente** — sem ele, a imagem e os textos da tela de entrada não salvam |
 
 O estado de cada um foi conferido consultando as colunas em produção, não pela
 data do arquivo.

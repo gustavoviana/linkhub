@@ -1,19 +1,55 @@
 'use client';
 
-// Entrada da central do cliente — CPF e senha, nos três layouts do protótipo
-// (docs/prototipo/src/{v1,v2,v3}.jsx, seção "01 · Tela de Login").
+// Entrada da central do cliente.
 //
-// Só CPF, como nas centrais dos provedores: é o número que o cliente sabe de
-// cor e o mesmo que identifica o contrato no ERP.
+// Uma tela dividida, como no protótipo (docs/prototipo/src/desktop-login.jsx):
+// a foto e a mensagem do provedor de um lado, o formulário do outro. No celular
+// vira faixa em cima e formulário centralizado embaixo.
+//
+// A quebra é por CONTAINER, não por janela: esta mesma tela é renderizada
+// dentro do mockup de celular do painel e nas capturas para as lojas, onde a
+// janela é a do desktop mas o espaço real são 390px. Media query de viewport
+// mostraria a versão de desktop dentro do celular.
+//
+// O acesso continua o mesmo: só CPF (senha quando o provedor exige). Sem QR
+// Code e sem WhatsApp — a central não tem esses caminhos de entrada.
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { Tenant } from '@/lib/supabase/types';
 import { documentKind, isValidDocument, maskDocument, onlyDigits } from '@/lib/documento';
 import { Icon } from '@/components/portal/icons';
-import { portalTokens, rgba, type PortalTokens } from '@/components/portal/tokens';
+import { rgba, type PortalTokens } from '@/components/portal/tokens';
 import { ThemeToggle, usePortalTokens } from '@/components/portal/theme';
 import { BrandMark } from '@/components/portal/ui';
+import { LOGIN_DESTAQUES, loginCopy } from '@/lib/portal/login-copy';
+
+const LOGIN_CSS = `
+.lh-login-root{container-type:inline-size;position:relative;min-height:100vh}
+.lh-login{display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1}
+.lh-login-art{position:relative;overflow:hidden;flex:0 0 auto;min-height:210px;display:flex}
+.lh-login-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.lh-login-scrim{position:absolute;inset:0;pointer-events:none}
+.lh-login-artinner{position:relative;z-index:1;display:flex;flex-direction:column;
+  width:100%;padding:26px 24px 22px;align-items:center;justify-content:center;gap:14px;text-align:center}
+.lh-login-form{flex:1 1 auto;display:flex;flex-direction:column;justify-content:center;
+  align-items:center;padding:26px 22px 30px}
+.lh-login-box{width:100%;max-width:400px;display:flex;flex-direction:column}
+.lh-login-copy{max-width:460px}
+.lh-login-desk{display:none}
+
+/* A partir de ~900px de ESPAÇO DISPONÍVEL (não de janela) a tela divide. */
+@container (min-width: 900px){
+  .lh-login{flex-direction:row;height:100vh;min-height:0}
+  .lh-login-art{flex:1.05 1 0;min-height:0;height:100%}
+  .lh-login-artinner{align-items:flex-start;justify-content:space-between;
+    text-align:left;padding:44px 52px}
+  .lh-login-form{flex:1 1 0;height:100%;overflow-y:auto;padding:40px 48px;justify-content:center}
+  .lh-login-box{max-width:420px}
+  .lh-login-desk{display:block}
+  .lh-login-mob{display:none}
+}
+`;
 
 export default function LoginForm({ tenant }: { tenant: Tenant }) {
   const router = useRouter();
@@ -77,6 +113,26 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
         ? `mailto:${tenant.support_email}`
         : null;
 
+  const { headline, subtitle } = loginCopy(tenant);
+  const foto = tenant.login_image_url || null;
+  const v = t.layout;
+
+  // Sobre a foto (ou a cor da marca) o fundo é sempre escuro — vale a versão
+  // clara da logo, que existe exatamente para isso. Sem ela, a logo comum vai
+  // dentro de uma placa clara: marca escura sobre fundo escuro some, e quem
+  // paga o preço é a primeira tela que o assinante vê.
+  const logoNaArte = tenant.logo_dark_url || tenant.logo_url;
+  const precisaDePlaca = !tenant.logo_dark_url && !!tenant.logo_url;
+
+  // Sem foto, o painel vira a marca do provedor: gradiente da cor dele com as
+  // formas do layout escolhido. Nada de retângulo cinza "faltando imagem".
+  const fundoArte = foto ? '#0f1220' : t.accentGrad;
+  const scrim = foto
+    ? v === 'v2'
+      ? `linear-gradient(105deg, rgba(8,6,20,0.92) 0%, rgba(8,6,20,0.72) 45%, ${rgba(t.accent, 0.42)} 100%)`
+      : `linear-gradient(180deg, rgba(10,12,24,0.55) 0%, rgba(10,12,24,0.28) 38%, ${rgba(t.accent, 0.88)} 100%)`
+    : 'transparent';
+
   const fields = (
     <>
       <div>
@@ -121,7 +177,7 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
             </span>
             <button
               type="button"
-              onClick={() => setShowPassword((v) => !v)}
+              onClick={() => setShowPassword((s) => !s)}
               aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
               style={{
                 position: 'absolute',
@@ -161,13 +217,13 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
         type="submit"
         disabled={loading}
         style={{
-          height: t.layout === 'v3' ? 56 : 52,
-          borderRadius: t.layout === 'v3' ? 18 : 14,
+          height: v === 'v3' ? 56 : 52,
+          borderRadius: v === 'v3' ? 18 : 14,
           background: t.accentGrad,
           color: t.accentFg,
           border: 'none',
           fontSize: 15,
-          fontWeight: t.layout === 'v3' ? 800 : 600,
+          fontWeight: v === 'v3' ? 800 : 600,
           marginTop: 4,
           cursor: loading ? 'progress' : 'pointer',
           opacity: loading ? 0.75 : 1,
@@ -180,7 +236,7 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
         }}
       >
         {loading ? 'Entrando…' : 'Entrar'}
-        {!loading && t.layout !== 'v1' && <Icon name="arrow-right" size={17} />}
+        {!loading && v !== 'v1' && <Icon name="arrow-right" size={17} />}
       </button>
 
       {/* O acesso do cliente é por CPF, sem e-mail próprio no Auth — quem
@@ -198,143 +254,172 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
     </>
   );
 
-  // Na entrada o botão flutua no canto: os três layouts têm topos bem
-  // diferentes e nenhum deles tem barra onde encaixá-lo.
-  const themeToggle = (
-    <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 10 }}>
-      <ThemeToggle t={t} onAccent={t.layout === 'v3'} />
-    </div>
-  );
+  // Caixa do formulário: o V2 é um cartão de vidro; os outros ficam soltos
+  // sobre a superfície do lado direito.
+  const caixaFormulario: React.CSSProperties =
+    v === 'v2'
+      ? {
+          padding: 24,
+          borderRadius: 24,
+          background: t.surface,
+          backdropFilter: 'blur(24px) saturate(170%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(170%)',
+          border: `1px solid ${t.border}`,
+          boxShadow: '0 28px 60px -20px rgba(0,0,0,0.45)',
+        }
+      : {};
 
-  // ── V3: cabeçalho ilustrado grande, formulário embaixo ────────────────
-  if (t.layout === 'v3') {
-    return (
-      <div style={{ minHeight: '100vh', background: t.bg, color: t.text, display: 'flex', flexDirection: 'column' }}>
-        {themeToggle}
-        <div
+  return (
+    <div
+      className="lh-login-root"
+      style={{ background: v === 'v2' ? t.bgGrad : t.bg, color: t.text }}
+    >
+      <style>{LOGIN_CSS}</style>
+
+      <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 5 }}>
+        <ThemeToggle t={t} />
+      </div>
+
+      <div className="lh-login">
+        {/* ── Lado da marca ─────────────────────────────────────────────── */}
+        <aside
+          className="lh-login-art"
           style={{
-            background: t.accentGrad,
-            color: t.accentFg,
-            padding: '56px 28px 44px',
-            borderBottomLeftRadius: 48,
-            borderBottomRightRadius: 48,
-            position: 'relative',
-            overflow: 'hidden',
+            background: fundoArte,
+            // V3 emoldura a foto num cartão arredondado, como no protótipo.
+            margin: v === 'v3' ? 12 : 0,
+            borderRadius: v === 'v3' ? 28 : 0,
           }}
         >
-          <div
-            style={{
-              position: 'absolute',
-              top: 40,
-              right: -40,
-              width: 200,
-              height: 200,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.16)',
-            }}
-          />
-          <div style={{ position: 'relative', maxWidth: 460, margin: '0 auto' }}>
-            <BrandMark tenant={tenant} t={t} size={44} showName={false} />
-            {!tenant.logo_url && (
-              <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 600, marginTop: 18 }}>{tenant.name}</div>
-            )}
-            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', marginTop: tenant.logo_url ? 18 : 6 }}>
-              Olá! 👋
-            </div>
-            <div style={{ fontSize: 14, opacity: 0.95, marginTop: 2 }}>Pronto pra navegar?</div>
-          </div>
-        </div>
-        <form onSubmit={onSubmit} style={{ padding: '28px 24px 40px', maxWidth: 460, width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.01em', margin: '0 0 4px' }}>Entrar</h1>
-            <p style={{ fontSize: 13, color: t.text2, margin: 0 }}>
-              {requirePassword ? 'Acesse com seu CPF e senha cadastrados.' : 'É só informar o seu CPF.'}
-            </p>
-          </div>
-          {fields}
-          <Footer t={t} tenant={tenant} />
-        </form>
-      </div>
-    );
-  }
-
-  // ── V2: cartão de vidro sobre fundo com brilho ────────────────────────
-  if (t.layout === 'v2') {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: t.bgGrad,
-          color: t.text,
-          padding: '54px 24px 36px',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        {themeToggle}
-        <div
-          style={{
-            position: 'absolute',
-            top: -120,
-            left: -80,
-            width: 320,
-            height: 320,
-            borderRadius: '50%',
-            background: `radial-gradient(circle, ${rgba(t.accent, 0.4)}, transparent 70%)`,
-            filter: 'blur(40px)',
-          }}
-        />
-        <div style={{ position: 'relative', zIndex: 1, maxWidth: 420, margin: '0 auto' }}>
-          <BrandMark tenant={tenant} t={t} size={60} showName={false} />
-          {!tenant.logo_url && (
-            <h1 style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.03em', margin: '22px 0 6px' }}>
-              {tenant.name}
-            </h1>
+          {foto && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="lh-login-photo" src={foto} alt="" />
           )}
-          <p style={{ fontSize: 14, color: t.text2, margin: tenant.logo_url ? '22px 0 0' : 0, lineHeight: 1.6 }}>
-            Sua conexão, seu controle.
-          </p>
+          <div className="lh-login-scrim" style={{ background: scrim }} />
+          {!foto && (
+            <div
+              style={{
+                position: 'absolute',
+                top: -70,
+                right: -70,
+                width: 260,
+                height: 260,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.12)',
+              }}
+            />
+          )}
 
-          <form
-            onSubmit={onSubmit}
-            style={{
-              marginTop: 36,
-              padding: 22,
-              borderRadius: 24,
-              background: t.surface,
-              backdropFilter: 'blur(20px) saturate(160%)',
-              WebkitBackdropFilter: 'blur(20px) saturate(160%)',
-              border: `1px solid ${t.border}`,
-              boxShadow: '0 24px 48px -16px rgba(0,0,0,0.4)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 14,
-            }}
-          >
-            {fields}
-          </form>
-          <Footer t={t} tenant={tenant} />
-        </div>
-      </div>
-    );
-  }
+          <div className="lh-login-artinner">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {logoNaArte ? (
+                <div
+                  style={
+                    precisaDePlaca
+                      ? {
+                          background: 'rgba(255,255,255,0.94)',
+                          borderRadius: 16,
+                          padding: '12px 16px',
+                          boxShadow: '0 10px 26px -12px rgba(0,0,0,0.5)',
+                          display: 'flex',
+                        }
+                      : { display: 'flex' }
+                  }
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={logoNaArte}
+                    alt={tenant.name}
+                    style={{ height: 40, maxWidth: 200, objectFit: 'contain' }}
+                  />
+                </div>
+              ) : (
+                <div style={{ fontSize: 20, fontWeight: 800, color: '#fff', letterSpacing: '-0.02em' }}>
+                  {tenant.name}
+                </div>
+              )}
+            </div>
 
-  // ── V1: limpo, sem caixa, foco na tipografia ──────────────────────────
-  return (
-    <div style={{ minHeight: '100vh', background: t.bg, color: t.text, padding: '60px 28px 40px' }}>
-      {themeToggle}
-      <div style={{ maxWidth: 400, margin: '0 auto', display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 100px)' }}>
-        <BrandMark tenant={tenant} t={t} size={56} showName={false} />
-        <h1 style={{ fontSize: 28, fontWeight: 700, letterSpacing: '-0.02em', margin: '28px 0 6px' }}>Bem-vindo</h1>
-        <p style={{ fontSize: 15, color: t.text2, margin: 0, lineHeight: 1.5 }}>
-          {requirePassword
-            ? 'Acesse sua central do cliente para ver faturas, pagar por Pix e falar com o suporte.'
-            : 'Informe seu CPF para ver faturas, pagar por Pix e falar com o suporte.'}
-        </p>
-        <form onSubmit={onSubmit} style={{ marginTop: 36, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {fields}
-        </form>
-        <Footer t={t} tenant={tenant} />
+            {/* No desktop a mensagem mora aqui, sobre a imagem. No celular ela
+                fica junto do formulário, onde sobra largura para lê-la. */}
+            <div className="lh-login-desk lh-login-copy">
+              <h1
+                style={{
+                  fontSize: v === 'v2' ? 44 : 38,
+                  lineHeight: 1.1,
+                  fontWeight: v === 'v1' ? 700 : 800,
+                  letterSpacing: '-0.03em',
+                  color: '#fff',
+                  margin: '0 0 14px',
+                }}
+              >
+                {headline}
+              </h1>
+              <p
+                style={{
+                  fontSize: 16,
+                  lineHeight: 1.6,
+                  color: 'rgba(255,255,255,0.85)',
+                  margin: '0 0 28px',
+                  maxWidth: 420,
+                }}
+              >
+                {subtitle}
+              </p>
+              <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap' }}>
+                {LOGIN_DESTAQUES.map((d) => (
+                  <div
+                    key={d.label}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      color: 'rgba(255,255,255,0.92)',
+                      fontSize: 13.5,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <Icon name={d.icon} size={15} color="#fff" /> {d.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* ── Lado do formulário ────────────────────────────────────────── */}
+        <main
+          className="lh-login-form"
+          style={{ background: v === 'v2' ? 'transparent' : t.surfaceSolid }}
+        >
+          <div className="lh-login-box">
+            <div style={{ ...caixaFormulario, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div className="lh-login-mob" style={{ textAlign: 'center' }}>
+                <h1 style={{ fontSize: 23, fontWeight: 800, letterSpacing: '-0.02em', margin: '0 0 6px' }}>
+                  {headline}
+                </h1>
+                <p style={{ fontSize: 14, color: t.text2, margin: 0, lineHeight: 1.55 }}>{subtitle}</p>
+              </div>
+
+              <div className="lh-login-desk">
+                <h2 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.025em', margin: '0 0 6px' }}>
+                  Acessar minha conta
+                </h2>
+                <p style={{ fontSize: 14, color: t.text2, margin: 0 }}>
+                  {requirePassword
+                    ? 'Use o CPF do titular e a sua senha.'
+                    : 'Use o CPF do titular do contrato.'}
+                </p>
+              </div>
+
+              <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {fields}
+              </form>
+            </div>
+
+            <Footer t={t} tenant={tenant} />
+          </div>
+        </main>
       </div>
     </div>
   );
@@ -342,7 +427,7 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
 
 function Footer({ t, tenant }: { t: PortalTokens; tenant: Tenant }) {
   return (
-    <div style={{ marginTop: 'auto', paddingTop: 28, textAlign: 'center', fontSize: 12, color: t.text3 }}>
+    <div style={{ paddingTop: 26, textAlign: 'center', fontSize: 12, color: t.text3 }}>
       {tenant.support_phone && <div>Precisa de ajuda? Ligue {tenant.support_phone}</div>}
       <div style={{ marginTop: 4 }}>Central feita com LinkHub</div>
     </div>
@@ -351,7 +436,7 @@ function Footer({ t, tenant }: { t: PortalTokens; tenant: Tenant }) {
 
 function labelStyle(t: PortalTokens): React.CSSProperties {
   return {
-    fontSize: t.layout === 'v3' ? 12 : 12,
+    fontSize: 12,
     color: t.layout === 'v3' ? t.text : t.text2,
     fontWeight: t.layout === 'v3' ? 700 : 500,
     display: 'block',

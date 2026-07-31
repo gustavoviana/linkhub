@@ -25,6 +25,11 @@ export interface Tenant {
   /** Versão clara da marca, usada no modo escuro. Ausente = usa a logo normal. */
   logo_dark_url?: string | null;
   favicon_url: string | null;
+  /** Foto da tela de entrada. Ausente = painel com as cores do provedor. */
+  login_image_url?: string | null;
+  /** Textos da tela de entrada. Ausentes = os padrões em lib/portal/login-copy. */
+  login_headline?: string | null;
+  login_subtitle?: string | null;
   support_phone: string | null;
   support_whatsapp: string | null;
   support_email: string | null;

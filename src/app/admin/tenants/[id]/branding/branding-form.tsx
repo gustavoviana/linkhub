@@ -8,6 +8,8 @@ import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import type { Tenant, TenantLayout } from '@/lib/supabase/types';
 import type { PreviewTheme } from '@/lib/tenant/preview-protocol';
+import { converterParaWebp, formatarBytes } from '@/lib/images/webp';
+import { LOGIN_HEADLINE_PADRAO, LOGIN_SUBTITLE_PADRAO } from '@/lib/portal/login-copy';
 import { PhonePreview } from './phone-preview';
 import { StoreExport } from './store-export';
 import { cn } from '@/lib/utils';
@@ -27,7 +29,10 @@ const LAYOUTS: { id: TenantLayout; name: string; desc: string }[] = [
   { id: 'v3', name: 'Friendly Bold', desc: 'Bordas arredondadas, cores fortes, tom amigável.' },
 ];
 
-type AssetKey = 'logo_url' | 'logo_dark_url' | 'favicon_url';
+type AssetKey = 'logo_url' | 'logo_dark_url' | 'favicon_url' | 'login_image_url';
+
+/** Colunas que dependem de migração ainda não aplicada em todo banco. */
+const COLUNAS_NOVAS = ['logo_dark_url', 'login_image_url', 'login_headline', 'login_subtitle'];
 
 export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   const router = useRouter();
@@ -40,6 +45,9 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     logo_url: tenant.logo_url ?? '',
     logo_dark_url: tenant.logo_dark_url ?? '',
     favicon_url: tenant.favicon_url ?? '',
+    login_image_url: tenant.login_image_url ?? '',
+    login_headline: tenant.login_headline ?? '',
+    login_subtitle: tenant.login_subtitle ?? '',
     support_phone: tenant.support_phone ?? '',
     support_whatsapp: tenant.support_whatsapp ?? '',
     support_email: tenant.support_email ?? '',
@@ -48,23 +56,51 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const MAX_ASSET_BYTES = 1024 * 1024;
+  // A foto da entrada é reencodada aqui no navegador antes de subir, então o
+  // que importa é o tamanho depois — o provedor pode mandar a foto do celular.
+  const MAX_FOTO_BYTES = 12 * 1024 * 1024;
+
+  const PASTA: Record<AssetKey, string> = {
+    logo_url: 'logo',
+    logo_dark_url: 'logo-dark',
+    favicon_url: 'favicon',
+    login_image_url: 'login',
+  };
 
   async function uploadAsset(file: File, field: AssetKey) {
-    if (file.size > MAX_ASSET_BYTES) {
-      setError('Arquivo acima de 1MB. Escolha uma imagem menor.');
+    const ehFoto = field === 'login_image_url';
+    if (file.size > (ehFoto ? MAX_FOTO_BYTES : MAX_ASSET_BYTES)) {
+      setError(
+        ehFoto
+          ? 'Arquivo acima de 12MB. Escolha uma foto menor.'
+          : 'Arquivo acima de 1MB. Escolha uma imagem menor.',
+      );
       return;
     }
     setUploading(field);
     setError(null);
+    setAviso(null);
+
+    // Só a foto é convertida: logo e ícone costumam ser SVG ou PNG com
+    // transparência, e rasterizar um vetor seria perder qualidade de graça.
+    const arte = ehFoto
+      ? await converterParaWebp(file)
+      : {
+          blob: file as Blob,
+          ext: file.name.split('.').pop()?.toLowerCase() || 'png',
+          tipo: file.type,
+          bytesAntes: file.size,
+          bytesDepois: file.size,
+        };
+
     const supabase = createClient();
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png';
-    const kind = field === 'logo_url' ? 'logo' : field === 'logo_dark_url' ? 'logo-dark' : 'favicon';
-    const path = `tenants/${tenant.id}/${kind}-${Date.now()}.${ext}`;
+    const path = `tenants/${tenant.id}/${PASTA[field]}-${Date.now()}.${arte.ext}`;
     const { error: upErr } = await supabase.storage
       .from('tenant-assets')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+      .upload(path, arte.blob, { cacheControl: '3600', upsert: false, contentType: arte.tipo });
     if (upErr) {
       setError(upErr.message);
       setUploading(null);
@@ -72,6 +108,12 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     }
     const { data: pub } = supabase.storage.from('tenant-assets').getPublicUrl(path);
     setForm((f) => ({ ...f, [field]: pub.publicUrl }));
+    if (ehFoto && arte.bytesDepois < arte.bytesAntes) {
+      setAviso(
+        `Foto convertida para WebP: ${formatarBytes(arte.bytesAntes)} → ${formatarBytes(arte.bytesDepois)}. ` +
+          'É o que o cliente baixa ao abrir a central.',
+      );
+    }
     setUploading(null);
   }
 
@@ -80,6 +122,9 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     name: form.name || tenant.name,
     logo_url: form.logo_url || null,
     logo_dark_url: form.logo_dark_url || null,
+    login_image_url: form.login_image_url || null,
+    login_headline: form.login_headline || null,
+    login_subtitle: form.login_subtitle || null,
     primary_color: form.primary_color,
     accent_color: form.accent_color,
     dark_mode_default: form.dark_mode_default,
@@ -103,6 +148,9 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
       layout: form.layout,
       logo_url: form.logo_url || null,
       logo_dark_url: form.logo_dark_url || null,
+      login_image_url: form.login_image_url || null,
+      login_headline: form.login_headline.trim() || null,
+      login_subtitle: form.login_subtitle.trim() || null,
       favicon_url: form.favicon_url || null,
       support_phone: form.support_phone || null,
       support_whatsapp: form.support_whatsapp || null,
@@ -110,15 +158,19 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     };
     let { error } = await (supabase.from('tenants').update(update as never)).eq('id', tenant.id);
 
-    // Banco ainda sem a migração 007: em vez de perder o que o provedor
+    // Banco ainda sem as migrações 007/008: em vez de perder o que o provedor
     // acabou de ajustar, salva o resto e diz o que ficou de fora.
-    if (error && /logo_dark_url/.test(error.message)) {
-      const { logo_dark_url: _pendente, ...semLogoDark } = update;
-      ({ error } = await (supabase.from('tenants').update(semLogoDark as never)).eq('id', tenant.id));
+    const faltando = COLUNAS_NOVAS.filter((c) => error && error.message.includes(c));
+    if (faltando.length) {
+      const parcial = { ...update };
+      for (const c of COLUNAS_NOVAS) delete parcial[c];
+      ({ error } = await (supabase.from('tenants').update(parcial as never)).eq('id', tenant.id));
       if (!error) {
         setSaving(false);
         setSaved(true);
-        setError('Tudo salvo, menos a logo do modo escuro: falta rodar a migração 007 no banco.');
+        setError(
+          'Tudo salvo, menos a logo do modo escuro e a tela de entrada: falta rodar as migrações 007 e 008 no banco.',
+        );
         router.refresh();
         return;
       }
@@ -279,6 +331,98 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
               </button>
             ))}
           </div>
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Tela de entrada</CardTitle>
+          <CardSubtitle>
+            A primeira tela que o cliente vê. O modelo acompanha o layout escolhido acima.
+          </CardSubtitle>
+        </CardHeader>
+        <CardBody className="space-y-5">
+          <div>
+            <Label>Imagem</Label>
+            <div className="flex items-start gap-4">
+              <div className="w-44 h-28 shrink-0 rounded-md border border-border overflow-hidden bg-bg-3 relative">
+                {form.login_image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.login_image_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center text-white text-xs font-medium text-center px-3"
+                    style={{ background: `linear-gradient(135deg, ${form.primary_color}, ${form.accent_color})` }}
+                  >
+                    Sem imagem — usa as cores da marca
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <input
+                  type="file"
+                  id="login-image-upload"
+                  accept="image/png,image/jpeg,image/webp,image/avif"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadAsset(file, 'login_image_url');
+                    e.target.value = '';
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    loading={uploading === 'login_image_url'}
+                    onClick={() => document.getElementById('login-image-upload')?.click()}
+                  >
+                    {form.login_image_url ? 'Trocar' : 'Enviar foto'}
+                  </Button>
+                  {form.login_image_url && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setForm({ ...form, login_image_url: '' })}
+                    >
+                      Remover
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-fg-2 mt-2 leading-relaxed">
+                  Convertida para WebP automaticamente, com no máximo 1920px — a foto de 5MB do
+                  celular chega ao cliente com algumas centenas de KB. Horizontal funciona melhor;
+                  aceita até 12MB de entrada.
+                </p>
+              </div>
+            </div>
+            {aviso && (
+              <p className="text-xs text-success mt-3 bg-success/10 rounded-md px-3 py-2">{aviso}</p>
+            )}
+          </div>
+
+          <Field
+            label="Título"
+            hint="Aparece grande, sobre a imagem. Vazio = usa o texto padrão."
+          >
+            <Input
+              value={form.login_headline}
+              onChange={(e) => setForm({ ...form, login_headline: e.target.value })}
+              placeholder={LOGIN_HEADLINE_PADRAO}
+              maxLength={90}
+            />
+          </Field>
+
+          <Field label="Chamada" hint="A frase menor, logo abaixo do título.">
+            <Input
+              value={form.login_subtitle}
+              onChange={(e) => setForm({ ...form, login_subtitle: e.target.value })}
+              placeholder={LOGIN_SUBTITLE_PADRAO}
+              maxLength={160}
+            />
+          </Field>
         </CardBody>
       </Card>
 
