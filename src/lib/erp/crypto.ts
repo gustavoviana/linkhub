@@ -35,6 +35,11 @@ export function isEncrypted(value: unknown): value is EncryptedEnvelope {
   return !!value && typeof value === 'object' && (value as EncryptedEnvelope).__enc === 1;
 }
 
+/** A chave existe e tem o tamanho certo? Só então vale cifrar o que está em claro. */
+export function hasEncryptionKey(): boolean {
+  return getKey() !== null;
+}
+
 /** Sem chave configurada, guarda em texto puro e avisa — melhor que perder a config. */
 export function encryptErpConfig(config: ErpConfig): Record<string, unknown> {
   const key = getKey();

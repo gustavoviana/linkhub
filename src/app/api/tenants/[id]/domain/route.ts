@@ -43,6 +43,12 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const sub = await getDomainStatus(tenantDomain(tenant.slug));
   const custom = tenant.custom_domain ? await getDomainStatus(tenant.custom_domain) : null;
 
+  // O certificado costuma sair depois do clique em "Provisionar agora"; é aqui,
+  // no polling da tela, que o domínio próprio finalmente vira verificado.
+  if (custom?.state === 'ready' && !tenant.custom_domain_verified) {
+    await auth.admin!.from('tenants').update({ custom_domain_verified: true } as never).eq('id', id);
+  }
+
   return NextResponse.json({ subdomain: sub, custom });
 }
 

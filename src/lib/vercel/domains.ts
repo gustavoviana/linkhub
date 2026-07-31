@@ -13,8 +13,9 @@ import 'server-only';
 const API = 'https://api.vercel.com';
 
 export type DomainState =
-  | 'ready'          // registrado e servindo
-  | 'pending'        // registrado, aguardando verificação/certificado
+  | 'ready'          // registrado, verificado e com certificado válido
+  | 'issuing'        // verificado; o certificado ainda está saindo
+  | 'pending'        // registrado, aguardando verificação de propriedade
   | 'unconfigured'   // integração da Vercel não configurada
   | 'error';
 
@@ -24,6 +25,8 @@ export interface DomainStatus {
   message?: string;
   /** Registro DNS que a Vercel está pedindo, quando há verificação pendente. */
   verification?: { type: string; domain: string; value: string }[];
+  /** Handshake TLS bateu — a prova de que o certificado existe mesmo. */
+  ssl?: boolean;
 }
 
 function config() {
@@ -88,6 +91,48 @@ export async function addDomain(domain: string): Promise<DomainStatus> {
   }
 }
 
+/**
+ * Pede à Vercel para reconferir o TXT de propriedade.
+ *
+ * Registrar o domínio de novo NÃO dispara nova checagem — sem esta chamada o
+ * host fica "verificação pendente" para sempre, mesmo com o TXT já publicado.
+ */
+export async function verifyDomain(domain: string): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  try {
+    const res = await call(
+      `/v9/projects/${cfg.projectId}/domains/${encodeURIComponent(domain)}/verify`,
+      { method: 'POST' },
+    );
+    return res.ok && res.body.verified === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Confirma que o certificado existe de verdade.
+ *
+ * A Vercel dizer "verified" só significa que a posse do domínio foi provada; o
+ * certificado sai alguns segundos depois. Quem responde essa pergunta sem
+ * margem para dúvida é o próprio handshake TLS: se ele completa, há
+ * certificado válido. O status HTTP não importa — 404 serve igual.
+ */
+async function hasCertificate(domain: string): Promise<boolean> {
+  try {
+    await fetch(`https://${domain}/favicon.ico`, {
+      method: 'HEAD',
+      redirect: 'manual',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function getDomainStatus(domain: string): Promise<DomainStatus> {
   const cfg = config();
   if (!cfg) return { state: 'unconfigured', domain };
@@ -99,17 +144,29 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus> {
     }
 
     const verification = (res.body.verification as DomainStatus['verification']) ?? undefined;
-    const verified = res.body.verified === true;
+    // Não verificado ainda: pode ser só falta de reconferir o TXT.
+    const verified = res.body.verified === true || (await verifyDomain(domain));
 
     if (!verified) {
       return {
         state: 'pending',
         domain,
-        message: 'Aguardando verificação de propriedade do domínio.',
+        message: 'Aguardando o registro DNS abaixo. Depois de publicá-lo, é só recarregar.',
         verification,
+        ssl: false,
       };
     }
-    return { state: 'ready', domain };
+
+    if (!(await hasCertificate(domain))) {
+      return {
+        state: 'issuing',
+        domain,
+        message: 'Domínio verificado. O certificado SSL está sendo emitido — costuma levar menos de um minuto.',
+        ssl: false,
+      };
+    }
+
+    return { state: 'ready', domain, ssl: true };
   } catch (e) {
     return { state: 'error', domain, message: e instanceof Error ? e.message : String(e) };
   }

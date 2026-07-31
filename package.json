@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "dominios": "node scripts/provisionar-dominios.mjs",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
     "types:gen": "supabase gen types typescript --local > src/lib/supabase/types.ts"

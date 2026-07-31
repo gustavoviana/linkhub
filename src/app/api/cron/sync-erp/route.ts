@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenants } from '@/lib/supabase/helpers';
-import { getAdapterForTenant } from '@/lib/erp';
+import { getAdapterForTenant, type ErpConfig } from '@/lib/erp';
+import { encryptErpConfig, hasEncryptionKey, isEncrypted } from '@/lib/erp/crypto';
 
 // Sincronização periódica com o ERP de cada provedor.
 //
@@ -25,10 +26,45 @@ function authorized(req: NextRequest) {
   return process.env.NODE_ENV !== 'production' && !secret;
 }
 
+/**
+ * Sobe para AES as credenciais que ficaram em texto puro.
+ *
+ * Config salva antes de `ERP_CONFIG_ENCRYPTION_KEY` existir foi gravada em
+ * claro — o token do ERP do provedor fica legível para qualquer um com um dump
+ * do banco. Cifrar exige a chave de produção, que só existe aqui dentro; por
+ * isso a correção mora no cron e não num script de máquina de desenvolvedor.
+ *
+ * Roda em toda passada: é uma consulta barata e cobre qualquer config que
+ * volte a ser gravada em claro (chave ausente num deploy, por exemplo).
+ */
+async function cifrarConfigsEmTextoPuro(admin: ReturnType<typeof createAdminClient>) {
+  if (!hasEncryptionKey()) return { cifrados: 0, pendentes: 0 };
+
+  const { data } = await admin.from('tenants').select('id, erp_config');
+  const linhas = (data ?? []) as { id: string; erp_config: unknown }[];
+
+  let cifrados = 0;
+  let pendentes = 0;
+  for (const linha of linhas) {
+    const config = linha.erp_config;
+    if (!config || typeof config !== 'object' || isEncrypted(config)) continue;
+    if (!Object.keys(config).length) continue;
+
+    const { error } = await admin
+      .from('tenants')
+      .update({ erp_config: encryptErpConfig(config as ErpConfig) } as never)
+      .eq('id', linha.id);
+    if (error) pendentes++;
+    else cifrados++;
+  }
+  return { cifrados, pendentes };
+}
+
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return new NextResponse('Unauthorized', { status: 401 });
 
   const admin = createAdminClient();
+  const seguranca = await cifrarConfigsEmTextoPuro(admin);
   const { data } = await admin
     .from('tenants')
     .select('*')
@@ -123,5 +159,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, tenants: tenants.length, report });
+  return NextResponse.json({ ok: true, tenants: tenants.length, seguranca, report });
 }

@@ -32,6 +32,16 @@ export default function DomainForm({ tenant, rootDomain }: { tenant: Tenant; roo
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Enquanto o certificado não sai, a tela se atualiza sozinha: o provedor
+  // clica uma vez e vê o cadeado acender, sem precisar ficar recarregando.
+  const emitindo = subdomain?.state === 'issuing' || custom?.state === 'issuing';
+  useEffect(() => {
+    if (!emitindo) return;
+    const t = setTimeout(load, 6000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emitindo, subdomain, custom]);
+
   async function provision() {
     setWorking(true);
     setError(null);
@@ -86,6 +96,8 @@ export default function DomainForm({ tenant, rootDomain }: { tenant: Tenant; roo
             <p className="text-sm text-danger">{subdomain.message}</p>
           )}
 
+          <SslLine status={subdomain} />
+
           {subdomain?.verification && subdomain.verification.length > 0 && (
             <VerificationTable records={subdomain.verification} />
           )}
@@ -120,6 +132,8 @@ export default function DomainForm({ tenant, rootDomain }: { tenant: Tenant; roo
             </div>
           )}
 
+          <SslLine status={custom} />
+
           {custom?.verification && custom.verification.length > 0 && (
             <VerificationTable records={custom.verification} />
           )}
@@ -145,10 +159,54 @@ export default function DomainForm({ tenant, rootDomain }: { tenant: Tenant; roo
 function StatusBadge({ status, loading }: { status: DomainStatus | null; loading: boolean }) {
   if (loading) return <span className="text-xs text-fg-3">verificando…</span>;
   if (!status) return <Badge tone="neutral">desconhecido</Badge>;
-  if (status.state === 'ready') return <Badge tone="success">no ar</Badge>;
+  if (status.state === 'ready') return <Badge tone="success">no ar · SSL ativo</Badge>;
+  if (status.state === 'issuing') return <Badge tone="warning">emitindo certificado</Badge>;
   if (status.state === 'pending') return <Badge tone="warning">verificação pendente</Badge>;
   if (status.state === 'unconfigured') return <Badge tone="neutral">automação desligada</Badge>;
   return <Badge tone="danger">erro</Badge>;
+}
+
+/**
+ * A confirmação que o provedor quer ver: o cadeado existe mesmo.
+ *
+ * Não é status de painel — o servidor abre uma conexão HTTPS no endereço antes
+ * de dizer que está ativo. Se o handshake passa, o certificado está no ar.
+ */
+function SslLine({ status }: { status: DomainStatus | null }) {
+  if (!status) return null;
+
+  if (status.state === 'ready') {
+    return (
+      <div className="flex items-start gap-2 text-sm rounded-md bg-success/10 text-success p-3">
+        <Icon name="lock" size={15} />
+        <div>
+          <strong className="font-semibold">Certificado SSL ativo.</strong>{' '}
+          <span className="text-fg-1">
+            <code className="font-mono text-xs">https://{status.domain}</code> abre com cadeado. A
+            renovação é automática, você não precisa fazer nada.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (status.state === 'issuing') {
+    return (
+      <div className="flex items-start gap-2 text-sm rounded-md bg-warning/10 p-3">
+        <Icon name="clock" size={15} />
+        <div className="text-fg-1">
+          <strong className="font-semibold">Emitindo o certificado…</strong> {status.message} Esta
+          tela se atualiza sozinha quando ficar pronto.
+        </div>
+      </div>
+    );
+  }
+
+  if (status.state === 'pending' && status.message) {
+    return <p className="text-sm text-fg-2 leading-relaxed">{status.message}</p>;
+  }
+
+  return null;
 }
 
 function VerificationTable({ records }: { records: { type: string; domain: string; value: string }[] }) {
@@ -175,6 +233,11 @@ function VerificationTable({ records }: { records: { type: string; domain: strin
           ))}
         </tbody>
       </table>
+      <p className="px-3 py-2 text-xs text-fg-2 border-t border-border">
+        Na Cloudflare (e na maioria dos painéis) o campo <strong>Nome</strong> recebe só a primeira
+        parte — <code className="font-mono">_vercel</code> —, sem repetir o domínio. Pode haver
+        vários registros com esse mesmo nome.
+      </p>
     </div>
   );
 }
