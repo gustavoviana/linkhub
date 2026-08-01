@@ -28,6 +28,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
           <NavItem href="/plataforma" icon="home">Visão geral</NavItem>
           <NavItem href="/plataforma/provedores" icon="building">Provedores</NavItem>
           <NavItem href="/plataforma/faturamento" icon="card">Faturamento</NavItem>
+          <NavItem href="/plataforma/conta" icon="shield">Minha conta</NavItem>
 
           <div className="mt-auto pt-4">
             <Link

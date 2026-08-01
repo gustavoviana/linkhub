@@ -17,6 +17,14 @@ const BODY = z.object({
   /** Ou criar um administrador novo para este provedor. */
   email: z.string().trim().toLowerCase().email().optional(),
   role: z.enum(['owner', 'admin', 'support', 'viewer']).default('admin'),
+  /**
+   * Senha escolhida no gerador da tela. Ausente = o servidor gera.
+   *
+   * O mínimo de 12 é do painel, não do Supabase, que aceita 6: senha de
+   * administrador de provedor com 6 caracteres cai em ataque de dicionário
+   * antes do fim do café.
+   */
+  password: z.string().min(12, 'A senha precisa de pelo menos 12 caracteres').max(72).optional(),
 });
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -37,7 +45,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const { data: tenant } = await supabase.from('tenants').select('id, name').eq('id', id).maybeSingle();
   if (!tenant) return NextResponse.json({ error: 'Provedor não encontrado' }, { status: 404 });
 
-  const senha = gerarSenha();
+  const senha = parsed.data.password ?? gerarSenha();
 
   // Redefinir a senha de quem já administra este provedor.
   if (user_id) {

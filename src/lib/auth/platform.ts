@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { createClient } from '@/lib/supabase/server';
 import { getUser } from './session';
 
 // Quem é super administrador da plataforma.
@@ -41,6 +42,20 @@ export const getPlatformSession = cache(async (): Promise<PlatformSession | null
   return { userId: row.user_id, email: row.email };
 });
 
+/**
+ * O segundo fator já foi apresentado nesta sessão?
+ *
+ * `currentLevel` é o que a sessão provou até agora e `nextLevel` é o que ela
+ * poderia provar. Quando os dois diferem, existe fator cadastrado e ele ainda
+ * não foi usado: é exatamente a janela em que uma senha roubada bastaria.
+ */
+export async function mfaPendente(): Promise<boolean> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error || !data) return false;
+  return data.nextLevel === 'aal2' && data.currentLevel !== 'aal2';
+}
+
 /** Guarda das páginas do painel da plataforma. */
 export async function requirePlatformAdmin(): Promise<PlatformSession> {
   const user = await getUser();
@@ -50,6 +65,8 @@ export async function requirePlatformAdmin(): Promise<PlatformSession> {
   // Logado, mas sem acesso: vai para o painel do provedor. Devolver 403 aqui
   // contaria que a rota existe para quem só errou o endereço.
   if (!session) redirect('/admin');
+
+  if (await mfaPendente()) redirect('/plataforma/verificar');
   return session;
 }
 
@@ -62,6 +79,12 @@ export async function requirePlatformApi(): Promise<
 
   const session = await getPlatformSession();
   if (!session) return { error: new NextResponse('Forbidden', { status: 403 }) };
+
+  // A trava vale para a API também. Barrar só a página deixaria a sessão com
+  // segundo fator pendente excluindo provedor por chamada direta.
+  if (await mfaPendente()) {
+    return { error: new NextResponse('Verificação em duas etapas pendente', { status: 403 }) };
+  }
   return { session };
 }
 

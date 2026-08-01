@@ -3,9 +3,14 @@
 //
 //   node scripts/super-admin.mjs gustavo@iconestudio.com.br
 //   node scripts/super-admin.mjs gustavo@iconestudio.com.br --senha
+//   node scripts/super-admin.mjs gustavo@iconestudio.com.br --remover-2fa
 //
 // Sem --senha, um usuário que já existe mantém a senha atual e só ganha o
 // acesso ao painel. Com --senha, uma senha nova é gerada e impressa uma vez.
+//
+// --remover-2fa apaga os autenticadores da conta, e é a saída para quem
+// perdeu o celular. Só funciona daqui, com a chave de serviço em mãos: se
+// desse para fazer pelo painel, o segundo fator não protegeria de nada.
 //
 // Lê SUPABASE_SERVICE_ROLE_KEY do .env.local. É a chave que ignora RLS: rode
 // isto da sua máquina, nunca de um servidor compartilhado.
@@ -35,9 +40,10 @@ function env() {
 
 const email = process.argv[2]?.trim().toLowerCase();
 const trocarSenha = process.argv.includes('--senha');
+const removerMfa = process.argv.includes('--remover-2fa');
 
 if (!email || !email.includes('@')) {
-  console.error('Uso: node scripts/super-admin.mjs <e-mail> [--senha]');
+  console.error('Uso: node scripts/super-admin.mjs <e-mail> [--senha] [--remover-2fa]');
   process.exit(1);
 }
 
@@ -88,6 +94,28 @@ if (existente) {
   }
   userId = data.user.id;
   console.log(`Usuário criado: ${email}`);
+}
+
+// 1b. Remover os autenticadores, quando pedido.
+if (removerMfa) {
+  const { data: fatores, error } = await supabase.auth.admin.mfa.listFactors({ userId });
+  if (error) {
+    console.error('Não foi possível listar os autenticadores:', error.message);
+    process.exit(1);
+  }
+  const lista = fatores?.factors ?? [];
+  for (const f of lista) {
+    const { error: erroDel } = await supabase.auth.admin.mfa.deleteFactor({ userId, id: f.id });
+    if (erroDel) {
+      console.error(`Não foi possível remover o fator ${f.id}:`, erroDel.message);
+      process.exit(1);
+    }
+  }
+  console.log(
+    lista.length
+      ? `${lista.length} autenticador(es) removido(s). Cadastre outro em /plataforma/conta.`
+      : 'Nenhum autenticador cadastrado nesta conta.',
+  );
 }
 
 // A credencial sai antes da concessão: se a migração ainda não rodou, o passo
