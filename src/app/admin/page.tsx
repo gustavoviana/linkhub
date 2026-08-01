@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getUserTenants } from '@/lib/auth/session';
-import { Button } from '@/components/ui/button';
+import { getPlatformSession } from '@/lib/auth/platform';
 import { Card, CardBody } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
@@ -11,13 +11,17 @@ export default async function AdminHome() {
   const tenants = await getUserTenants();
 
   if (tenants.length === 0) {
+    // Super administrador sem provedor próprio: o lugar dele é a plataforma.
+    const platform = await getPlatformSession();
+    if (platform) redirect('/plataforma');
+
     return (
       <div className="p-8 max-w-2xl">
         <h1 className="text-2xl font-bold mb-1">Bem-vindo ao LinkHub</h1>
-        <p className="text-fg-2 mb-6">Você ainda não tem nenhum provedor cadastrado.</p>
-        <Link href="/admin/tenants/new">
-          <Button>Criar meu primeiro provedor</Button>
-        </Link>
+        <p className="text-fg-2 mb-6 leading-relaxed">
+          Sua conta ainda não está vinculada a nenhum provedor. Fale com quem cuida da sua conta no
+          LinkHub para liberar o acesso.
+        </p>
       </div>
     );
   }
@@ -28,14 +32,9 @@ export default async function AdminHome() {
 
   return (
     <div className="p-8 max-w-5xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">Meus provedores</h1>
-          <p className="text-sm text-fg-2 mt-1">Selecione um provedor para gerenciar</p>
-        </div>
-        <Link href="/admin/tenants/new">
-          <Button>Novo provedor</Button>
-        </Link>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Meus provedores</h1>
+        <p className="text-sm text-fg-2 mt-1">Selecione um provedor para gerenciar</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

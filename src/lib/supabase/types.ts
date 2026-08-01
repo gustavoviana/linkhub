@@ -148,6 +148,45 @@ export interface TenantAdmin {
   created_at: string;
 }
 
+// Painel da plataforma (super administrador).
+
+export type BillingStatus = 'trial' | 'active' | 'past_due' | 'cancelled';
+export type ChargeStatus = 'open' | 'paid' | 'overdue' | 'cancelled';
+
+export interface PlatformAdmin {
+  user_id: string;
+  email: string;
+  name: string | null;
+  created_at: string;
+}
+
+export interface TenantBilling {
+  tenant_id: string;
+  monthly_amount_cents: number;
+  billing_day: number;
+  status: BillingStatus;
+  trial_ends_at: string | null;
+  started_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TenantCharge {
+  id: string;
+  tenant_id: string;
+  /** Sempre o dia 1 do mês cobrado. */
+  reference_month: string;
+  amount_cents: number;
+  due_date: string;
+  status: ChargeStatus;
+  paid_at: string | null;
+  method: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Database type estilo Supabase para uso com createClient<Database>.
 // Aqui simplificado: apenas as tabelas que usamos. Gere a versão completa
 // com `npm run types:gen` se quiser autocompletar full coverage.

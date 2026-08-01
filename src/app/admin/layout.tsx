@@ -1,17 +1,22 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getUser, getUserTenants } from '@/lib/auth/session';
+import { getPlatformSession } from '@/lib/auth/platform';
 import { Icon, type IconName } from '@/components/portal/icons';
 
 // Barra lateral do painel — portada de docs/prototipo/src/admin-dash.jsx:
 // marca, seletor de provedor, navegação em três blocos (configuração,
 // operação, conta) e o rodapé com o usuário.
+//
+// Este painel é do cliente e cuida de UM provedor. Gestão de provedores,
+// cobrança e senha de terceiros moram em /plataforma, e o atalho para lá só
+// aparece para quem é super administrador.
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await getUser();
   if (!user) redirect('/login?next=/admin');
 
-  const tenants = await getUserTenants();
+  const [tenants, platform] = await Promise.all([getUserTenants(), getPlatformSession()]);
   const current = tenants[0]?.tenant ?? null;
 
   return (
@@ -55,7 +60,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
         <nav className="px-3 flex-1 overflow-y-auto flex flex-col gap-0.5">
           <NavItem href="/admin" icon="home">Visão geral</NavItem>
-          <NavItem href="/admin/tenants/new" icon="building">Meus provedores</NavItem>
 
           {current && (
             <>
@@ -72,6 +76,18 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               <NavItem href={`/admin/tenants/${current.id}/team`} icon="shield">Equipe &amp; acessos</NavItem>
               <NavItem href={`/admin/tenants/${current.id}/configuracoes`} icon="settings">Configurações</NavItem>
             </>
+          )}
+
+          {platform && (
+            <div className="mt-auto pt-4">
+              <Link
+                href="/plataforma"
+                className="flex items-center gap-2.5 px-[11px] py-2 rounded-lg text-[12.5px] font-medium text-fg-2 border border-dashed border-border hover:border-brand hover:text-brand transition-colors"
+              >
+                <Icon name="shield" size={15} />
+                <span className="flex-1">Painel da plataforma</span>
+              </Link>
+            </div>
           )}
         </nav>
 
