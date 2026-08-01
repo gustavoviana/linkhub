@@ -68,6 +68,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   let custom = null;
   const wanted = parsed.data.custom_domain?.trim() || null;
   if (wanted && wanted !== tenant.custom_domain) {
+    // Trocou o nome (corrigiu uma letra, por exemplo): o anterior sai do
+    // projeto. Sem isso ele fica de alias órfão na Vercel para sempre.
+    if (tenant.custom_domain) await removeDomain(tenant.custom_domain);
     custom = await addDomain(wanted);
     await admin
       .from('tenants')

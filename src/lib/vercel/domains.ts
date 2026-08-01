@@ -1,4 +1,5 @@
 import 'server-only';
+import { promises as dns } from 'node:dns';
 
 // Cliente da API de domínios da Vercel.
 //
@@ -42,6 +43,10 @@ export interface DomainStatus {
   found?: { cnames: string[]; aValues: string[]; nameservers: string[] };
   /** Registros que atrapalham o apontamento (A e CNAME no mesmo nome, por exemplo). */
   conflicts?: { type: string; name: string; value: string }[];
+  /** O domínio raiz não existe no DNS. Quase sempre é erro de digitação. */
+  apexUnresolved?: boolean;
+  /** Domínio raiz de onde sai o registro: fibranet.com.br para app.fibranet.com.br. */
+  apex?: string;
   /** Handshake TLS bateu — a prova de que o certificado existe mesmo. */
   ssl?: boolean;
 }
@@ -171,6 +176,27 @@ async function getConfig(domain: string): Promise<VercelDomainConfig | null> {
 const trimDot = (v: string) => v.replace(/\.$/, '');
 
 /**
+ * O domínio raiz existe no DNS público?
+ *
+ * Separa as duas causas de "não aponta para cá", que pedem ações opostas:
+ * domínio certo com registro faltando, ou domínio que não existe. O segundo é
+ * quase sempre erro de digitação, e sem esta checagem a tela mandava criar um
+ * CNAME num domínio inexistente — o provedor cria, funciona no domínio certo,
+ * e a tela continua dizendo que falta apontar.
+ */
+async function apexResolves(apex: string): Promise<boolean> {
+  try {
+    const ns = await Promise.race([
+      dns.resolveNs(apex),
+      new Promise<string[]>((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+    ]);
+    return ns.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * O registro que o provedor precisa criar.
  *
  * Os valores vêm da própria Vercel, não de constante no código: cada projeto
@@ -285,14 +311,18 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus> {
     const expected = expectedRecords(domain, apexName, conf);
 
     if (conf.misconfigured) {
+      const apexOk = await apexResolves(apexName);
       return {
         state: 'dns_missing',
         domain,
-        message:
-          'O DNS ainda não aponta para cá. Crie o registro abaixo no painel onde o domínio está registrado e confira de novo.',
+        message: apexOk
+          ? 'O DNS ainda não aponta para cá. Crie o registro abaixo no painel onde o domínio está registrado e confira de novo.'
+          : `O domínio ${apexName} não responde no DNS: ou está escrito errado, ou ainda não foi registrado, ou não tem servidores DNS configurados no registrador.`,
         expected,
         found,
         conflicts: conf.conflicts,
+        apexUnresolved: !apexOk,
+        apex: apexName,
         ssl: false,
       };
     }

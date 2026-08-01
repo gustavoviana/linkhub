@@ -251,6 +251,32 @@ function StatusPanel({
     );
   }
 
+  // Domínio raiz inexistente é outro problema: não adianta mandar criar
+  // registro num domínio que não existe. Quase sempre é letra trocada.
+  if (status.state === 'dns_missing' && status.apexUnresolved) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-start gap-2 text-sm rounded-md bg-danger/10 p-3">
+          <Icon name="x" size={15} />
+          <div className="text-fg">
+            <strong className="font-semibold">Este domínio não existe no DNS.</strong>{' '}
+            {status.message} Confira a grafia com calma, letra por letra: um caractere trocado é a
+            causa mais comum, e o registro que você criar no domínio certo nunca vai aparecer aqui
+            enquanto o cadastro apontar para o nome errado.
+          </div>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button type="button" onClick={onCheck} loading={checking}>
+            Conferir de novo
+          </Button>
+          <span className="text-xs text-fg-2">
+            Corrigiu a grafia? Salve o domínio novo antes de conferir.
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   if (status.state === 'dns_missing') {
     return (
       <div className="space-y-3">
