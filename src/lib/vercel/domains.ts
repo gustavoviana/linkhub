@@ -13,18 +13,35 @@ import 'server-only';
 const API = 'https://api.vercel.com';
 
 export type DomainState =
-  | 'ready'          // registrado, verificado e com certificado válido
-  | 'issuing'        // verificado; o certificado ainda está saindo
+  | 'ready'          // apontado e com certificado válido
+  | 'issuing'        // DNS correto; falta o certificado
+  | 'dns_missing'    // registrado no projeto, mas o DNS não aponta para cá
   | 'pending'        // registrado, aguardando verificação de propriedade
   | 'unconfigured'   // integração da Vercel não configurada
   | 'error';
+
+/** Registro que precisa existir no painel de DNS do provedor. */
+export interface DnsRecord {
+  type: 'A' | 'CNAME' | 'TXT';
+  /** Nome do registro como se digita na maioria dos painéis: "app", "@". */
+  name: string;
+  value: string;
+  /** Outros valores que a Vercel também aceita para o mesmo registro. */
+  alternatives?: string[];
+}
 
 export interface DomainStatus {
   state: DomainState;
   domain: string;
   message?: string;
-  /** Registro DNS que a Vercel está pedindo, quando há verificação pendente. */
+  /** Registro de propriedade que a Vercel pede, quando há verificação pendente. */
   verification?: { type: string; domain: string; value: string }[];
+  /** O apontamento que falta. */
+  expected?: DnsRecord[];
+  /** O que existe hoje no DNS, para o provedor comparar com o esperado. */
+  found?: { cnames: string[]; aValues: string[]; nameservers: string[] };
+  /** Registros que atrapalham o apontamento (A e CNAME no mesmo nome, por exemplo). */
+  conflicts?: { type: string; name: string; value: string }[];
   /** Handshake TLS bateu — a prova de que o certificado existe mesmo. */
   ssl?: boolean;
 }
@@ -111,13 +128,112 @@ export async function verifyDomain(domain: string): Promise<boolean> {
   }
 }
 
+interface VercelDomainConfig {
+  configuredBy: string | null;
+  misconfigured: boolean;
+  cnames: string[];
+  aValues: string[];
+  nameservers: string[];
+  conflicts: { type: string; name: string; value: string }[];
+  recommendedIPv4?: { rank: number; value: string[] }[];
+  recommendedCNAME?: { rank: number; value: string }[];
+}
+
+/**
+ * O que o DNS público responde para este domínio, na visão da Vercel.
+ *
+ * É esta chamada que sabe se o apontamento existe. `verified` na ficha do
+ * projeto responde outra pergunta: se a posse do domínio foi provada, o que a
+ * Vercel dá de graça quando ninguém mais reivindicou o nome. Confundir os dois
+ * fazia a tela anunciar "emitindo certificado" para um domínio que nem tinha
+ * registro criado ainda.
+ */
+async function getConfig(domain: string): Promise<VercelDomainConfig | null> {
+  try {
+    const res = await call(`/v6/domains/${encodeURIComponent(domain)}/config`);
+    if (!res.ok) return null;
+    const b = res.body as Record<string, unknown>;
+    return {
+      configuredBy: (b.configuredBy as string | null) ?? null,
+      misconfigured: b.misconfigured === true,
+      cnames: (b.cnames as string[]) ?? [],
+      aValues: (b.aValues as string[]) ?? [],
+      nameservers: (b.nameservers as string[]) ?? [],
+      conflicts: (b.conflicts as VercelDomainConfig['conflicts']) ?? [],
+      recommendedIPv4: b.recommendedIPv4 as VercelDomainConfig['recommendedIPv4'],
+      recommendedCNAME: b.recommendedCNAME as VercelDomainConfig['recommendedCNAME'],
+    };
+  } catch {
+    return null;
+  }
+}
+
+const trimDot = (v: string) => v.replace(/\.$/, '');
+
+/**
+ * O registro que o provedor precisa criar.
+ *
+ * Os valores vêm da própria Vercel, não de constante no código: cada projeto
+ * recebe um destino de CNAME próprio, e os IPs mudaram mais de uma vez. Ficam
+ * ordenados por `rank`, então o primeiro é o recomendado hoje e o resto entra
+ * como alternativa aceita.
+ */
+function expectedRecords(domain: string, apexName: string, cfg: VercelDomainConfig): DnsRecord[] {
+  const isApex = domain === apexName;
+
+  if (isApex) {
+    const ranked = [...(cfg.recommendedIPv4 ?? [])].sort((a, b) => a.rank - b.rank);
+    const primary = ranked[0]?.value ?? ['76.76.21.21'];
+    const alternatives = ranked.slice(1).flatMap((r) => r.value);
+    return primary.map((value) => ({ type: 'A' as const, name: '@', value, alternatives }));
+  }
+
+  const host = domain.slice(0, -(apexName.length + 1));
+  const ranked = [...(cfg.recommendedCNAME ?? [])].sort((a, b) => a.rank - b.rank);
+  const primary = ranked[0]?.value ? trimDot(ranked[0].value) : 'cname.vercel-dns.com';
+  return [
+    {
+      type: 'CNAME',
+      name: host,
+      value: primary,
+      alternatives: ranked.slice(1).map((r) => trimDot(r.value)),
+    },
+  ];
+}
+
+/**
+ * Manda a Vercel emitir o certificado agora.
+ *
+ * Ela emite sozinha alguns segundos depois de o DNS ficar correto, mas quando o
+ * apontamento demorou a propagar a emissão automática já passou, e o domínio
+ * fica sem cadeado até alguém cutucar. Este é o cutucão.
+ */
+export async function issueCertificate(domain: string): Promise<{ ok: boolean; message?: string }> {
+  const cfg = config();
+  if (!cfg) return { ok: false, message: 'Integração com a Vercel não configurada.' };
+
+  try {
+    const res = await call('/v8/certs', {
+      method: 'POST',
+      body: JSON.stringify({ cns: [domain] }),
+    });
+    if (res.ok) return { ok: true };
+
+    const message =
+      (res.body?.error as { message?: string } | undefined)?.message ??
+      `Vercel respondeu ${res.status}`;
+    return { ok: false, message };
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 /**
  * Confirma que o certificado existe de verdade.
  *
- * A Vercel dizer "verified" só significa que a posse do domínio foi provada; o
- * certificado sai alguns segundos depois. Quem responde essa pergunta sem
- * margem para dúvida é o próprio handshake TLS: se ele completa, há
- * certificado válido. O status HTTP não importa — 404 serve igual.
+ * Quem responde essa pergunta sem margem para dúvida é o próprio handshake
+ * TLS: se ele completa, há certificado válido. O status HTTP não importa —
+ * 404 serve igual.
  */
 async function hasCertificate(domain: string): Promise<boolean> {
   try {
@@ -144,6 +260,8 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus> {
     }
 
     const verification = (res.body.verification as DomainStatus['verification']) ?? undefined;
+    const apexName = (res.body.apexName as string | undefined) ?? domain;
+
     // Não verificado ainda: pode ser só falta de reconferir o TXT.
     const verified = res.body.verified === true || (await verifyDomain(domain));
 
@@ -151,8 +269,30 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus> {
       return {
         state: 'pending',
         domain,
-        message: 'Aguardando o registro DNS abaixo. Depois de publicá-lo, é só recarregar.',
+        message:
+          'A Vercel precisa confirmar que o domínio é seu. Publique o registro abaixo e confira de novo.',
         verification,
+        ssl: false,
+      };
+    }
+
+    const conf = await getConfig(domain);
+    if (!conf) {
+      return { state: 'error', domain, message: 'Não foi possível consultar o DNS na Vercel.' };
+    }
+
+    const found = { cnames: conf.cnames, aValues: conf.aValues, nameservers: conf.nameservers };
+    const expected = expectedRecords(domain, apexName, conf);
+
+    if (conf.misconfigured) {
+      return {
+        state: 'dns_missing',
+        domain,
+        message:
+          'O DNS ainda não aponta para cá. Crie o registro abaixo no painel onde o domínio está registrado e confira de novo.',
+        expected,
+        found,
+        conflicts: conf.conflicts,
         ssl: false,
       };
     }
@@ -161,12 +301,14 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus> {
       return {
         state: 'issuing',
         domain,
-        message: 'Domínio verificado. O certificado SSL está sendo emitido — costuma levar menos de um minuto.',
+        message: 'Apontamento correto. Falta emitir o certificado SSL.',
+        expected,
+        found,
         ssl: false,
       };
     }
 
-    return { state: 'ready', domain, ssl: true };
+    return { state: 'ready', domain, found, ssl: true };
   } catch (e) {
     return { state: 'error', domain, message: e instanceof Error ? e.message : String(e) };
   }

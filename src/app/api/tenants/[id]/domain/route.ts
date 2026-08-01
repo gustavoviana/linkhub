@@ -1,52 +1,35 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
+import { requireTenantOwner } from '@/lib/auth/api-guard';
 import { addDomain, getDomainStatus, removeDomain, tenantDomain } from '@/lib/vercel/domains';
 
 // Provisionamento de domínio do provedor.
 //
 // POST  → registra o subdomínio (e o domínio próprio, se enviado) na Vercel
-// GET   → estado atual, com os registros DNS pendentes
+// GET   → estado atual: apontamento do DNS, verificação e certificado
 // DELETE→ remove o domínio próprio
-
-async function requireOwner(id: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: new NextResponse('Unauthorized', { status: 401 }) };
-
-  const admin = createAdminClient();
-  const { data: membership } = await admin
-    .from('tenant_admins')
-    .select('role')
-    .eq('tenant_id', id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  const role = (membership as { role?: string } | null)?.role;
-  if (role !== 'owner' && role !== 'admin') {
-    return { error: new NextResponse('Forbidden', { status: 403 }) };
-  }
-  return { admin, user };
-}
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const auth = await requireOwner(id);
-  if ('error' in auth) return auth.error;
+  const auth = await requireTenantOwner(id);
+  if (auth.error) return auth.error;
 
-  const { data } = await auth.admin!.from('tenants').select('*').eq('id', id).single();
+  const { data } = await auth.admin.from('tenants').select('*').eq('id', id).single();
   const tenant = asTenantOrNull(data);
   if (!tenant) return new NextResponse('Not found', { status: 404 });
 
   const sub = await getDomainStatus(tenantDomain(tenant.slug));
   const custom = tenant.custom_domain ? await getDomainStatus(tenant.custom_domain) : null;
 
-  // O certificado costuma sair depois do clique em "Provisionar agora"; é aqui,
-  // no polling da tela, que o domínio próprio finalmente vira verificado.
+  // É aqui, no "Conferir apontamento" da tela, que o domínio próprio
+  // finalmente vira verificado no cadastro.
   if (custom?.state === 'ready' && !tenant.custom_domain_verified) {
-    await auth.admin!.from('tenants').update({ custom_domain_verified: true } as never).eq('id', id);
+    await auth.admin.from('tenants').update({ custom_domain_verified: true } as never).eq('id', id);
+  } else if (custom && custom.state !== 'ready' && tenant.custom_domain_verified) {
+    // Caiu: DNS removido ou certificado vencido. Deixar marcado como
+    // verificado esconderia a queda de quem precisa agir.
+    await auth.admin.from('tenants').update({ custom_domain_verified: false } as never).eq('id', id);
   }
 
   return NextResponse.json({ subdomain: sub, custom });
@@ -64,9 +47,9 @@ const BODY = z.object({
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const auth = await requireOwner(id);
-  if ('error' in auth) return auth.error;
-  const admin = auth.admin!;
+  const auth = await requireTenantOwner(id);
+  if (auth.error) return auth.error;
+  const admin = auth.admin;
 
   const { data } = await admin.from('tenants').select('*').eq('id', id).single();
   const tenant = asTenantOrNull(data);
@@ -102,7 +85,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   await admin.from('audit_log').insert({
     tenant_id: id,
-    actor_user_id: auth.user!.id,
+    actor_user_id: auth.userId,
     action: 'tenant.domain_provisioned',
     resource_type: 'tenant',
     resource_id: id,
@@ -114,9 +97,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const auth = await requireOwner(id);
-  if ('error' in auth) return auth.error;
-  const admin = auth.admin!;
+  const auth = await requireTenantOwner(id);
+  if (auth.error) return auth.error;
+  const admin = auth.admin;
 
   const { data } = await admin.from('tenants').select('custom_domain').eq('id', id).single();
   const current = (data as { custom_domain?: string | null } | null)?.custom_domain;
