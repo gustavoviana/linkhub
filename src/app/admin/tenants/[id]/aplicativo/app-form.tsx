@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -124,6 +125,20 @@ export default function AppForm({
 
   return (
     <form onSubmit={save} className="p-8 space-y-6 max-w-3xl">
+      <Link
+        href={`/admin/tenants/${tenant.id}/aplicativo/guia`}
+        className="flex items-center gap-3 p-4 rounded-lg border border-brand/30 bg-brand/5 hover:bg-brand/10 transition-colors"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-semibold">Guia de publicação nas lojas</div>
+          <div className="text-xs text-fg-2 mt-0.5 leading-relaxed">
+            O passo a passo de Play e App Store com as regras de 2026: o que marcar em cada
+            formulário e os textos da ficha já escritos para esta central.
+          </div>
+        </div>
+        <span className="text-brand text-sm font-medium shrink-0">Abrir →</span>
+      </Link>
+
       <Card>
         <CardHeader>
           <CardTitle>Aplicativo Android</CardTitle>

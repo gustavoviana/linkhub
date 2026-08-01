@@ -15,6 +15,7 @@ mapa: o que já funciona, o que falta, e o que depende de você.
 | Build Android automatizado → `.aab` assinado | ✅ código pronto — falta ligar (2 passos abaixo) |
 | Screenshots e ícones das lojas | ✅ em produção |
 | Projeto iOS para o Xcode | ✅ em produção |
+| Guia de publicação no painel (Play e App Store, regras de 2026) | ✅ em produção |
 | Notificação push de fatura | ❌ próximo passo — é o que faz a Apple aceitar |
 | Entrada por Face ID / biometria | ❌ depois do push |
 | Deep links (abrir link da fatura dentro do app) | ❌ pequeno, depois |
@@ -48,6 +49,29 @@ humana, na ordem em que trava as coisas:
 
 Depois disso, o próximo trabalho de código é o push — o plano detalhado está
 no fim deste documento.
+
+---
+
+## O guia de publicação fica no painel
+
+Este documento explica como a máquina funciona. **Como publicar de fato — o
+passo a passo de cada loja — está em Aplicativo › "Guia de publicação nas
+lojas"** (`/admin/tenants/<id>/aplicativo/guia`).
+
+O guia vive no painel, e não aqui, porque é o provedor que vai executá-lo: ele
+traz o que marcar em cada formulário do Play Console e do App Store Connect,
+por que aquela resposta e não a outra, a ficha de Segurança dos dados já
+resolvida para esta central, os textos da loja gerados com o nome e os
+contatos do provedor, um modelo de política de privacidade e os links
+oficiais. O conteúdo mora em `src/lib/tenant/store-guide.ts` (passos) e
+`src/lib/tenant/store-copy.ts` (textos).
+
+**Quando a central mudar, o guia envelhece.** Dois pontos exigem revisão: se o
+app passar a coletar dados novos — push, biometria, qualquer SDK de medição —,
+a etapa de Segurança dos dados precisa acompanhar, porque ficha desatualizada
+é motivo de remoção; e as notas de revisão da Apple citam push, Face ID e
+offline como recursos existentes, o que só será verdade depois do próximo
+trabalho de código.
 
 ---
 
