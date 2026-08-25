@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { IxcAdapter } from '@/lib/erp/ixc';
 import { SgpAdapter } from '@/lib/erp/sgp';
+import { IspfyAdapter } from '@/lib/erp/ispfy';
 import { HubsoftAdapter } from '@/lib/erp/hubsoft';
 import { MockAdapter } from '@/lib/erp/mock';
 import { mergeErpSecrets } from '@/lib/erp/crypto';
@@ -54,6 +55,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       case 'sgp':
         if (!cfg.sgp?.baseUrl || !cfg.sgp?.token) return incomplete('SGP');
         adapter = new SgpAdapter(cfg.sgp); break;
+      case 'ispfy':
+        if (!cfg.ispfy?.baseUrl || !cfg.ispfy?.token) return incomplete('ISPFY');
+        adapter = new IspfyAdapter(cfg.ispfy); break;
       case 'hubsoft':
         if (!cfg.hubsoft?.baseUrl || !cfg.hubsoft?.clientId) return incomplete('Hubsoft');
         adapter = new HubsoftAdapter(cfg.hubsoft); break;

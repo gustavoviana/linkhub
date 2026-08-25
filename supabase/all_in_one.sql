@@ -47,7 +47,7 @@ create extension if not exists "uuid-ossp";
 
 create type tenant_layout as enum ('v1', 'v2', 'v3');
 create type tenant_status as enum ('active', 'suspended', 'trial', 'cancelled');
-create type erp_type as enum ('mock', 'ixc', 'sgp', 'hubsoft', 'mk_solutions');
+create type erp_type as enum ('mock', 'ixc', 'sgp', 'ispfy', 'hubsoft', 'mk_solutions');
 create type admin_role as enum ('owner', 'admin', 'support', 'viewer');
 create type invoice_status as enum ('open', 'paid', 'overdue', 'cancelled', 'partial');
 create type contract_status as enum ('active', 'suspended', 'cancelled', 'pending');

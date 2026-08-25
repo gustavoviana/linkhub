@@ -3,7 +3,7 @@
 
 export type TenantLayout = 'v1' | 'v2' | 'v3';
 export type TenantStatus = 'active' | 'suspended' | 'trial' | 'cancelled';
-export type ErpType = 'mock' | 'ixc' | 'sgp' | 'hubsoft' | 'mk_solutions';
+export type ErpType = 'mock' | 'ixc' | 'sgp' | 'ispfy' | 'hubsoft' | 'mk_solutions';
 export type AdminRole = 'owner' | 'admin' | 'support' | 'viewer';
 export type InvoiceStatus = 'open' | 'paid' | 'overdue' | 'cancelled' | 'partial';
 export type ContractStatus = 'active' | 'suspended' | 'cancelled' | 'pending';

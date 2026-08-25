@@ -93,6 +93,7 @@ export function decryptErpConfig(stored: unknown): ErpConfig {
 const SECRET_FIELDS: Record<string, string[]> = {
   ixc: ['token'],
   sgp: ['token'],
+  ispfy: ['token'],
   hubsoft: ['clientSecret', 'password'],
   mk_solutions: ['password', 'wsPass'],
 };

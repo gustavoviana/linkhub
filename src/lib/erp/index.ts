@@ -4,6 +4,7 @@ import type { ErpAdapter, ErpConfig } from './types';
 import { MockAdapter } from './mock';
 import { IxcAdapter } from './ixc';
 import { SgpAdapter } from './sgp';
+import { IspfyAdapter } from './ispfy';
 import { HubsoftAdapter } from './hubsoft';
 import { decryptErpConfig } from './crypto';
 
@@ -23,6 +24,9 @@ export function getAdapterForTenant(tenant: Tenant): ErpAdapter {
       case 'sgp':
         if (!cfg.sgp?.baseUrl || !cfg.sgp?.token) return new MockAdapter();
         return new SgpAdapter(cfg.sgp);
+      case 'ispfy':
+        if (!cfg.ispfy?.baseUrl || !cfg.ispfy?.token) return new MockAdapter();
+        return new IspfyAdapter(cfg.ispfy);
       case 'hubsoft':
         if (!cfg.hubsoft?.baseUrl || !cfg.hubsoft?.clientId) return new MockAdapter();
         return new HubsoftAdapter(cfg.hubsoft);

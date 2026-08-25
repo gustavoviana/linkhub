@@ -315,6 +315,7 @@ export default async function TenantOverview({ params }: { params: Promise<{ id:
 const ERPS = [
   { id: 'ixc', name: 'IXC Soft', auth: 'Token de API + host', tag: 'Mais usado' },
   { id: 'sgp', name: 'SGP', auth: 'App + token público', tag: null },
+  { id: 'ispfy', name: 'ISPFY', auth: 'Token API do usuário', tag: null },
   { id: 'hubsoft', name: 'Hubsoft', auth: 'OAuth2 client', tag: null },
   { id: 'mock', name: 'Dados de teste', auth: 'Enquanto você integra', tag: null },
 ];

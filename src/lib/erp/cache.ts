@@ -22,6 +22,7 @@ type Admin = ReturnType<typeof createAdminClient>;
 const CAMPOS_DE_IDENTIDADE: Record<string, string[]> = {
   ixc: ['baseUrl'],
   sgp: ['baseUrl', 'app'],
+  ispfy: ['baseUrl'],
   hubsoft: ['baseUrl', 'clientId', 'username'],
   mk_solutions: ['baseUrl', 'user'],
 };

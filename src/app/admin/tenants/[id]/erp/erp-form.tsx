@@ -9,11 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import type { Tenant, ErpType } from '@/lib/supabase/types';
 import type { MaskedErpConfig } from '@/lib/erp/crypto';
 import { mensagemDeLiberacao } from '@/lib/erp/liberacao-de-ip';
+import { instrucoesDoErp } from '@/lib/erp/instrucoes';
 import { cn } from '@/lib/utils';
 
 const ERPS: { id: ErpType; name: string; desc: string }[] = [
   { id: 'ixc', name: 'IXC Soft', desc: 'Auth via Base64(usuário:apiKey)' },
   { id: 'sgp', name: 'SGP', desc: 'App + token da API Central do Assinante' },
+  { id: 'ispfy', name: 'ISPFY', desc: 'Token API do usuário do sistema' },
   { id: 'hubsoft', name: 'Hubsoft', desc: 'OAuth2 password grant' },
   { id: 'mk_solutions', name: 'MK Solutions', desc: 'Em breve' },
   { id: 'mock', name: 'Dados de teste', desc: 'Use enquanto integra. Mostra dados fictícios.' },
@@ -129,6 +131,11 @@ export default function ErpForm({
     router.refresh();
     setTimeout(() => setSaved(false), 2500);
   }
+
+  // O que o provedor precisa fazer do lado de lá, no ERP dele. Acompanha o
+  // sistema escolhido: enquanto ele passeia pela lista, a tela já mostra o
+  // caminho daquele ERP em vez de esperar ele salvar para descobrir.
+  const instrucoes = instrucoesDoErp(type);
 
   // Pedido pronto para o suporte do ERP, montado com o que já está na tela —
   // o provedor não deveria ter que redigitar nome, central nem IP.
@@ -273,6 +280,65 @@ export default function ErpForm({
         </CardBody>
       </Card>
 
+      {type !== 'mock' && instrucoes && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Como configurar no {instrucoes.nome}</CardTitle>
+            <CardSubtitle>{instrucoes.resumo}</CardSubtitle>
+          </CardHeader>
+          <CardBody className="space-y-5">
+            <ol className="space-y-4">
+              {instrucoes.passos.map((passo, i) => (
+                <li key={passo.titulo} className="flex gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand/10 text-xs font-semibold text-brand">
+                    {i + 1}
+                  </span>
+                  <div className="text-sm leading-relaxed">
+                    <p className="font-medium text-fg">{passo.titulo}</p>
+                    {passo.caminho && (
+                      <p className="mt-1 text-xs text-fg-2">
+                        Em{' '}
+                        <code className="px-1.5 py-0.5 rounded bg-bg-3 text-fg">
+                          {passo.caminho}
+                        </code>
+                      </p>
+                    )}
+                    <p className="mt-1 text-fg-2">{passo.detalhe}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            {instrucoes.atencao && instrucoes.atencao.length > 0 && (
+              <div className="rounded-md border border-border bg-bg-3/50 px-4 py-3">
+                <p className="mb-1.5 text-sm font-medium text-fg">Antes de abrir chamado</p>
+                <ul className="space-y-1.5 text-sm leading-relaxed text-fg-2">
+                  {instrucoes.atencao.map((item) => (
+                    <li key={item} className="flex gap-2">
+                      <span aria-hidden className="text-fg-3">
+                        •
+                      </span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {instrucoes.documentacao && (
+              <a
+                href={instrucoes.documentacao.url}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-block text-sm text-brand hover:underline"
+              >
+                {instrucoes.documentacao.titulo} ↗
+              </a>
+            )}
+          </CardBody>
+        </Card>
+      )}
+
       {type !== 'mock' && (
         <Card>
           <CardHeader>
@@ -328,6 +394,35 @@ export default function ErpForm({
                     type="password"
                     placeholder={savedSecret('token') ? '••••••••••••' : undefined}
                     value={cfg.sgp?.token ?? ''}
+                    onChange={(e) => updateCfg('token', e.target.value)}
+                  />
+                </Field>
+              </>
+            )}
+
+            {type === 'ispfy' && (
+              <>
+                <Field
+                  label="Endereço do servidor"
+                  hint="Inclua a porta do webservice — 8043 para HTTPS, 8020 para HTTP. Ex: https://central.seuprovedor.com.br:8043"
+                >
+                  <Input
+                    value={cfg.ispfy?.baseUrl ?? ''}
+                    onChange={(e) => updateCfg('baseUrl', e.target.value)}
+                    placeholder="https://central.seuprovedor.com.br:8043"
+                  />
+                </Field>
+                <Field
+                  label="Token da API"
+                  hint={
+                    secretHint('token') ??
+                    'O campo "Token API" do usuário, no ISPFY em Sistema → Usuários. Ele herda as permissões desse usuário.'
+                  }
+                >
+                  <Input
+                    type="password"
+                    placeholder={savedSecret('token') ? '••••••••••••' : undefined}
+                    value={cfg.ispfy?.token ?? ''}
                     onChange={(e) => updateCfg('token', e.target.value)}
                   />
                 </Field>
