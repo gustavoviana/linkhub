@@ -128,7 +128,22 @@ export async function POST(req: NextRequest) {
   // 2. Não → busca no ERP e materializa.
   if (!customer) {
     const adapter = getAdapterForTenant(tenant);
-    const erpCustomer = await adapter.findCustomerByCpf(cpfClean);
+
+    // Integração fora do ar não é CPF errado. O ERP recusado devolvia lista
+    // vazia e o assinante levava "Cliente não encontrado" na cara, mandando
+    // ele conferir um CPF que estava certo — e o provedor não ficava sabendo
+    // que a integração tinha parado. Agora o erro do ERP se separa do 404.
+    let erpCustomer;
+    try {
+      erpCustomer = await adapter.findCustomerByCpf(cpfClean);
+    } catch (e) {
+      console.error('[portal] consulta de cliente no ERP falhou', e);
+      return new NextResponse(
+        'Não conseguimos consultar seu cadastro agora. Tente de novo em alguns minutos.',
+        { status: 503 },
+      );
+    }
+
     if (!erpCustomer) {
       return new NextResponse('Cliente não encontrado. Verifique seu CPF.', { status: 404 });
     }

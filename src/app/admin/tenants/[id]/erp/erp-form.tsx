@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input, Field, Label } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/component
 import { Badge } from '@/components/ui/badge';
 import type { Tenant, ErpType } from '@/lib/supabase/types';
 import type { MaskedErpConfig } from '@/lib/erp/crypto';
+import { mensagemDeLiberacao } from '@/lib/erp/liberacao-de-ip';
 import { cn } from '@/lib/utils';
 
 const ERPS: { id: ErpType; name: string; desc: string }[] = [
@@ -18,7 +19,68 @@ const ERPS: { id: ErpType; name: string; desc: string }[] = [
   { id: 'mock', name: 'Dados de teste', desc: 'Use enquanto integra. Mostra dados fictícios.' },
 ];
 
-export default function ErpForm({ tenant, masked }: { tenant: Tenant; masked: MaskedErpConfig }) {
+interface Removidos {
+  customers: number;
+  contracts: number;
+  invoices: number;
+  plans: number;
+}
+
+function contar(r: Removidos) {
+  return [
+    `${r.customers} cliente(s)`,
+    `${r.contracts} contrato(s)`,
+    `${r.plans} plano(s)`,
+    `${r.invoices} fatura(s)`,
+  ].join(', ');
+}
+
+/** Troca de ERP apaga o acervo do anterior; troca de senha só o vence. */
+function descreverTroca(resultado: {
+  removidos?: Removidos | null;
+  trocouCredencial?: boolean;
+} | null): string | null {
+  if (resultado?.removidos) {
+    return (
+      `A integração passou a apontar para outro sistema, então removemos ${contar(resultado.removidos)} ` +
+      'que tinham sido copiados do ERP anterior. Os dados do ERP novo entram na próxima consulta.'
+    );
+  }
+  if (resultado?.trocouCredencial) {
+    return (
+      'Credencial atualizada. O que estava em cache foi marcado como vencido: a próxima ' +
+      'consulta busca tudo de novo no ERP, sem esperar o intervalo de sincronização.'
+    );
+  }
+  return null;
+}
+
+// O componente roda no navegador, mas o Next renderiza a primeira versão no
+// servidor, que está em UTC. Sem fuso fixo as duas datas saem diferentes e a
+// hidratação acusa divergência — por isso o horário é sempre o de Brasília,
+// que é o que o provedor usa para se orientar.
+function formatarData(iso: string): string {
+  return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+}
+
+interface UltimaSync {
+  em: string | null;
+  status: string | null;
+  /** Erro da última sincronização, já traduzido pelo servidor. */
+  erro: string | null;
+}
+
+export default function ErpForm({
+  tenant,
+  masked,
+  ipsDeSaida,
+  ultimaSync,
+}: {
+  tenant: Tenant;
+  masked: MaskedErpConfig;
+  ipsDeSaida: string[];
+  ultimaSync: UltimaSync;
+}) {
   const router = useRouter();
   const [type, setType] = useState<ErpType>(tenant.erp_type);
   const [cfg, setCfg] = useState<any>(masked.config ?? {});
@@ -32,6 +94,16 @@ export default function ErpForm({ tenant, masked }: { tenant: Tenant; masked: Ma
   const [error, setError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; message?: string } | null>(null);
+  // O que aconteceu com o que já tinha sido sincronizado quando a integração
+  // mudou — o admin precisa ver, senão some dado sem explicação.
+  const [aviso, setAviso] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState<'ip' | 'mensagem' | null>(null);
+  const [limpando, setLimpando] = useState(false);
+  // A tela precisa dizer sozinha se a integração está de pé. Esperar o admin
+  // clicar em "Testar conexão" foi o que deixou a LM NET semanas achando que
+  // estava tudo certo: o painel não mostrava nada, e o erro só aparecia para o
+  // assinante, escrito como se o CPF dele estivesse errado.
+  const [checando, setChecando] = useState(false);
 
   function updateCfg(key: string, value: string) {
     setCfg((c: any) => ({ ...c, [type]: { ...(c[type] ?? {}), [key]: value } }));
@@ -50,29 +122,129 @@ export default function ErpForm({ tenant, masked }: { tenant: Tenant; masked: Ma
     });
     setSaving(false);
     if (!r.ok) { setError(await r.text()); return; }
+
+    const resultado = await r.json().catch(() => null);
+    setAviso(descreverTroca(resultado));
     setSaved(true);
     router.refresh();
     setTimeout(() => setSaved(false), 2500);
   }
 
+  // Pedido pronto para o suporte do ERP, montado com o que já está na tela —
+  // o provedor não deveria ter que redigitar nome, central nem IP.
+  const pedidoDeLiberacao = mensagemDeLiberacao({
+    erpType: type,
+    provedor: tenant.name,
+    baseUrl: cfg?.[type]?.baseUrl,
+    ips: ipsDeSaida,
+  });
+
+  async function copiar(texto: string, qual: "ip" | "mensagem") {
+    await navigator.clipboard.writeText(texto);
+    setCopiado(qual);
+    window.setTimeout(() => setCopiado(null), 2500);
+  }
+
+  async function limparCache() {
+    const confirmado = window.confirm(
+      'Apagar os clientes, contratos, planos e faturas que o LinkHub copiou do ERP?\n\n' +
+        'Nada é perdido: tudo volta do ERP configurado agora, na próxima consulta.',
+    );
+    if (!confirmado) return;
+
+    setLimpando(true);
+    setError(null);
+    const r = await fetch(`/api/tenants/${tenant.id}/erp/cache`, { method: 'DELETE' });
+    setLimpando(false);
+    if (!r.ok) { setError(await r.text()); return; }
+
+    const { removidos } = await r.json();
+    setAviso(`Removidos ${contar(removidos)}. Tudo volta do ERP atual na próxima consulta.`);
+    router.refresh();
+  }
+
+  // Roda no clique e sozinha ao abrir a tela, então não pode deixar promessa
+  // rejeitada solta: uma queda de rede travaria o "Verificando…" para sempre.
   async function testConnection() {
     setTesting(true);
     setTestResult(null);
-    const r = await fetch(`/api/tenants/${tenant.id}/erp/test`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ erp_type: type, erp_config: cfg }),
-    });
-    setTesting(false);
-    if (!r.ok) {
-      setTestResult({ ok: false, message: await r.text() });
-      return;
+    try {
+      const r = await fetch(`/api/tenants/${tenant.id}/erp/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ erp_type: type, erp_config: cfg }),
+      });
+      setTestResult(r.ok ? await r.json() : { ok: false, message: await r.text() });
+    } catch {
+      setTestResult({
+        ok: false,
+        message: 'Não conseguimos falar com o servidor para checar a integração. Verifique sua conexão.',
+      });
+    } finally {
+      setTesting(false);
     }
-    setTestResult(await r.json());
   }
+
+  // Só vale checar a integração que está salva: enquanto o admin passeia pela
+  // lista de ERPs, o que está na tela ainda não é a configuração do provedor.
+  const integracaoSalva =
+    tenant.erp_type !== 'mock' && !!masked.config?.[tenant.erp_type]?.baseUrl;
+
+  useEffect(() => {
+    if (!integracaoSalva) return;
+    setChecando(true);
+    testConnection().finally(() => setChecando(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // O que a tela afirma sobre a integração agora. A checagem ao vivo manda —
+  // é deste instante; a última sincronização entra só quando não houve
+  // resposta nenhuma ainda.
+  type Diagnostico = { estado: 'checando' | 'ok' | 'falha'; texto: string };
+  const diagnostico: Diagnostico | null = !integracaoSalva
+    ? null
+    : checando
+      ? { estado: 'checando', texto: 'Verificando se o seu ERP está respondendo…' }
+      : testResult
+        ? testResult.ok
+          ? {
+              estado: 'ok',
+              texto:
+                'O seu ERP respondeu e aceitou a credencial. As consultas dos assinantes ' +
+                'estão chegando ao sistema.',
+            }
+          : { estado: 'falha', texto: testResult.message ?? 'O seu ERP recusou a chamada.' }
+        : ultimaSync.erro
+          ? { estado: 'falha', texto: ultimaSync.erro }
+          : null;
 
   return (
     <div className="p-8 max-w-4xl space-y-6">
+      {diagnostico && (
+        <div
+          className={cn(
+            'rounded-md border px-4 py-3.5 text-sm leading-relaxed',
+            diagnostico.estado === 'falha' && 'border-danger/30 bg-danger/10 text-fg',
+            diagnostico.estado === 'ok' && 'border-border bg-success/10 text-fg',
+            diagnostico.estado === 'checando' && 'border-border bg-bg-3/50 text-fg-2',
+          )}
+        >
+          <p className="font-medium mb-1">
+            {diagnostico.estado === 'falha' && '✗ A integração não está funcionando'}
+            {diagnostico.estado === 'ok' && '✓ Integração funcionando'}
+            {diagnostico.estado === 'checando' && 'Verificando a integração…'}
+          </p>
+          <p className="text-fg-2">
+            {diagnostico.texto}
+          </p>
+          {ultimaSync.em && (
+            <p className="mt-2 text-xs text-fg-2">
+              Última sincronização: {formatarData(ultimaSync.em)}
+              {ultimaSync.status === 'error' && ' — terminou com erro'}
+            </p>
+          )}
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Escolha o ERP</CardTitle>
@@ -221,6 +393,103 @@ export default function ErpForm({ tenant, masked }: { tenant: Tenant; masked: Ma
             </div>
           </CardBody>
         </Card>
+      )}
+
+      {type !== 'mock' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Liberação de IP no seu ERP</CardTitle>
+            <CardSubtitle>
+              A maioria dos ERPs só aceita chamadas de endereços liberados. Se a integração
+              está com a credencial certa e ainda assim é recusada, normalmente é isto.
+            </CardSubtitle>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            {ipsDeSaida.length === 0 ? (
+              <div className="rounded-md border border-border bg-bg-3/50 px-4 py-3 text-sm leading-relaxed text-fg-2">
+                <p className="text-fg font-medium mb-1">Sem IP fixo de saída.</p>
+                <p>
+                  O endereço que o ERP precisa liberar é o de <strong>saída</strong> — de onde as
+                  chamadas partem — e não o IP para onde o seu domínio aponta. Esta aplicação roda
+                  em infraestrutura sem IP de saída fixo: o endereço muda sozinho, e qualquer
+                  liberação feita hoje pararia de valer. Por isso o pedido abaixo vai escrito de
+                  outro jeito — ele pede ao suporte que desligue a restrição de IP no usuário da
+                  API, mantendo a autenticação por token. Se um dia houver IP fixo, basta
+                  preencher
+                  <code className="mx-1 px-1.5 py-0.5 rounded bg-bg-3 text-fg text-xs">ERP_OUTBOUND_IP</code>
+                  que o pedido passa a trazer o endereço.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <Label>{ipsDeSaida.length > 1 ? 'IPs de saída' : 'IP de saída'}</Label>
+                <div className="mt-1.5 flex items-center gap-3 flex-wrap">
+                  <code className="px-3 py-2 rounded-md bg-bg-3 text-fg text-sm font-mono">
+                    {ipsDeSaida.join(', ')}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => copiar(ipsDeSaida.join(', '), 'ip')}
+                  >
+                    Copiar IP
+                  </Button>
+                  {copiado === 'ip' && <span className="text-sm text-success">✓ Copiado</span>}
+                </div>
+                <p className="mt-1.5 text-xs text-fg-2">
+                  É este endereço que o ERP precisa liberar — de onde as chamadas partem, não
+                  o IP para onde o seu domínio aponta.
+                </p>
+              </div>
+            )}
+
+            <div>
+              <div className="flex items-center gap-3 mb-1.5">
+                <Label>Pedido pronto para o suporte</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copiar(pedidoDeLiberacao, 'mensagem')}
+                >
+                  Copiar mensagem
+                </Button>
+                {copiado === 'mensagem' && <span className="text-sm text-success">✓ Copiado</span>}
+              </div>
+              <pre className="text-xs bg-bg-3 rounded-md p-4 overflow-auto max-h-80 text-fg-2 leading-relaxed whitespace-pre-wrap">
+                {pedidoDeLiberacao}
+              </pre>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Dados sincronizados</CardTitle>
+          <CardSubtitle>
+            Clientes, contratos, planos e faturas que o LinkHub copiou do ERP. Trocar a
+            integração de sistema já limpa isso sozinho — use o botão quando a conta ficou com
+            dados de outro ERP, de um teste de integração por exemplo.
+          </CardSubtitle>
+        </CardHeader>
+        <CardBody>
+          <div className="flex gap-3 items-center flex-wrap">
+            <Button type="button" variant="danger" size="sm" loading={limpando} onClick={limparCache}>
+              Limpar dados sincronizados
+            </Button>
+            <span className="text-xs text-fg-2">
+              Nada é perdido: tudo volta do ERP configurado agora. Chamados de suporte ficam.
+            </span>
+          </div>
+        </CardBody>
+      </Card>
+
+      {aviso && (
+        <div className="rounded-md border border-border bg-bg-3/50 px-4 py-3 text-sm leading-relaxed text-fg-2">
+          {aviso}
+        </div>
       )}
 
       <div className="flex gap-3 items-center sticky bottom-0 bg-bg-2 border-t border-border -mx-8 px-8 py-3">

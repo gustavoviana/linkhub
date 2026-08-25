@@ -2,7 +2,14 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { encryptErpConfig, mergeErpSecrets } from '@/lib/erp/crypto';
+import { decryptErpConfig, encryptErpConfig, mergeErpSecrets } from '@/lib/erp/crypto';
+import {
+  credencialMudou,
+  identidadeDoErp,
+  limparCacheDoErp,
+  marcarCacheVencido,
+  type ResumoDaLimpeza,
+} from '@/lib/erp/cache';
 
 // Gravação da integração de ERP.
 //
@@ -81,9 +88,11 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
   // vez de apagar a credencial só porque o formulário não a exibe.
   const { data: currentRow } = await admin
     .from('tenants')
-    .select('erp_config')
+    .select('erp_type, erp_config')
     .eq('id', id)
     .single();
+
+  const atual = (currentRow ?? null) as { erp_type?: string; erp_config?: unknown } | null;
 
   const merged =
     erp_type === 'mock'
@@ -92,9 +101,25 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
           [erp_type]: mergeErpSecrets(
             erp_type,
             (erp_config[erp_type] ?? {}) as Record<string, string | undefined>,
-            (currentRow as { erp_config?: unknown } | null)?.erp_config,
+            atual?.erp_config,
           ),
         };
+
+  // O que já foi sincronizado é cópia do ERP anterior, endereçada pelos ids
+  // dele. Se a integração passou a apontar para outro sistema, essa cópia não
+  // descreve mais ninguém deste provedor — e como o login lê o banco antes de
+  // perguntar ao ERP, ela continuaria sendo servida no lugar dos assinantes de
+  // verdade. Trocar só o segredo mantém a instalação: aí basta vencer o cache.
+  const tipoAnterior = atual?.erp_type ?? erp_type;
+  const blocoAnterior = (decryptErpConfig(atual?.erp_config) as Record<
+    string,
+    Record<string, string>
+  >)?.[tipoAnterior];
+  const blocoNovo = (merged as Record<string, Record<string, string>>)[erp_type];
+
+  const trocouDeSistema =
+    identidadeDoErp(tipoAnterior, blocoAnterior) !== identidadeDoErp(erp_type, blocoNovo);
+  const trocouCredencial = credencialMudou(blocoAnterior, blocoNovo);
 
   // Guarda só o bloco do ERP escolhido — não faz sentido manter credencial
   // de uma integração que o provedor abandonou — e cifrado.
@@ -106,14 +131,21 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
     .eq('id', id);
   if (error) return new NextResponse(error.message, { status: 500 });
 
+  let removidos: ResumoDaLimpeza | null = null;
+  if (trocouDeSistema) {
+    removidos = await limparCacheDoErp(admin, id);
+  } else if (trocouCredencial) {
+    await marcarCacheVencido(admin, id);
+  }
+
   await admin.from('audit_log').insert({
     tenant_id: id,
     actor_user_id: user.id,
     action: 'tenant.erp_updated',
     resource_type: 'tenant',
     resource_id: id,
-    metadata: { erp_type },
+    metadata: { erp_type, trocou_de_sistema: trocouDeSistema, removidos },
   } as never);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, trocouDeSistema, trocouCredencial, removidos });
 }

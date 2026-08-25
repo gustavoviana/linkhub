@@ -1,6 +1,7 @@
 import type { ErpAdapter, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig, ErpConnection, ErpUsagePoint, ErpUsageRange, ErpPix } from './types';
 import { usageSlots } from './usage';
 import { documentVariants } from '@/lib/documento';
+import { explicarErroDoErp } from './erros';
 
 // Adapter IXC Soft.
 // Doc: https://wiki.ixcsoft.com.br/ — endpoint /webservice/v1/<recurso>
@@ -86,38 +87,45 @@ function parseSpeeds(name?: string): { down: number; up: number } | null {
   return null;
 }
 
-/** Traduz o erro do IXC para algo acionável — e sem HTML cru na tela. */
+/**
+ * O IXC serve o JSON declarando ISO-8859-1 com o texto já em UTF-8, então
+ * "não" chega escrito "nÃ£o". Desfaz a dupla codificação quando o resultado é
+ * texto válido — senão a mensagem do ERP apareceria embaralhada no painel.
+ */
+function corrigirAcentos(texto: string): string {
+  if (!/[ÃÂ]/.test(texto)) return texto;
+  try {
+    const refeito = Buffer.from(texto, 'latin1').toString('utf8');
+    return refeito.includes('\uFFFD') ? texto : refeito;
+  } catch {
+    return texto;
+  }
+}
+
+/**
+ * O IXC recusa chamada respondendo HTTP 200: o motivo vem no corpo, como
+ * {"type":"error","message":"Seu IP não está liberado..."}. Tratar isso como
+ * resposta boa era o que fazia o painel dizer "Conexão OK" com a integração
+ * recusada, e a central responder "cliente não encontrado" para assinante que
+ * existe — a lista vinha vazia porque o IXC nem chegou a consultar.
+ *
+ * Devolve o motivo da recusa, ou null quando a resposta é legítima.
+ */
+function motivoDaRecusa(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const p = payload as { type?: unknown; message?: unknown; mensagem?: unknown };
+  if (String(p.type ?? '').toLowerCase() !== 'error') return null;
+  const texto = corrigirAcentos(String(p.message ?? p.mensagem ?? '').trim());
+  return texto || 'o IXC recusou a chamada sem informar o motivo.';
+}
+
+/**
+ * Traduz o erro do IXC para algo acionável. Os casos são os mesmos de
+ * qualquer ERP — restrição de IP, credencial recusada, host errado — então
+ * a tradução mora em ./erros, junto com a de onde arrumar cada um.
+ */
 function explainIxcError(e: unknown): string {
-  const raw = e instanceof Error ? e.message : String(e);
-
-  if (/\b401\b/.test(raw)) {
-    return (
-      'O IXC recusou a credencial (401). Confira, nesta ordem: ' +
-      '1) o token precisa ser o Base64 de "usuario:chave" — se você tem os dois separados, ' +
-      'pode colar no formato usuario:chave que o LinkHub codifica; ' +
-      '2) no IXC, em Configurações → Integrações → Webservice, confirme se o usuário da API está ativo; ' +
-      '3) se houver restrição de IP no webservice, o IP do servidor precisa estar liberado.'
-    );
-  }
-  if (/\b403\b/.test(raw)) {
-    return 'O IXC aceitou a credencial mas bloqueou o acesso (403). Normalmente é restrição de IP ou permissão do usuário da API.';
-  }
-  if (/\b404\b/.test(raw)) {
-    return 'Endereço não encontrado (404). Confira a Base URL — deve ser o host da central, sem /webservice no final.';
-  }
-  if (/ENOTFOUND|EAI_AGAIN|getaddrinfo/i.test(raw)) {
-    return 'Não encontramos esse endereço. Confira o domínio da central do IXC.';
-  }
-  if (/ECONNREFUSED|ETIMEDOUT|timeout|fetch failed/i.test(raw)) {
-    return 'Não conseguimos conectar no servidor do IXC. Ele pode estar fora do ar ou bloqueando conexões externas.';
-  }
-  if (/certificate|SSL|TLS/i.test(raw)) {
-    return 'O certificado HTTPS da central do IXC não foi aceito. Confira se ele está válido.';
-  }
-
-  // Resposta em HTML (página de erro do nginx) vira texto legível.
-  const stripped = raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  return stripped.length > 220 ? `${stripped.slice(0, 220)}…` : stripped;
+  return explicarErroDoErp('ixc', e);
 }
 
 export class IxcAdapter implements ErpAdapter {
@@ -143,7 +151,11 @@ export class IxcAdapter implements ErpAdapter {
       cache: 'no-store',
     });
     if (!r.ok) throw new Error(`IXC ${resource} ${r.status}: ${await r.text()}`);
-    return r.json();
+
+    const payload = (await r.json()) as T;
+    const recusa = motivoDaRecusa(payload);
+    if (recusa) throw new Error(`IXC ${resource}: ${recusa}`);
+    return payload;
   }
 
   async testConnection() {
