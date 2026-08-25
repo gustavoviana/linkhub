@@ -30,6 +30,10 @@ const CONFIG_SCHEMA = z.object({
     app: z.string().min(1),
     token: z.string().min(1),
   }).partial().optional(),
+  ispfy: z.object({
+    baseUrl: z.string().url(),
+    token: z.string().min(1),
+  }).partial().optional(),
   hubsoft: z.object({
     baseUrl: z.string().url(),
     clientId: z.string().min(1),
@@ -47,7 +51,7 @@ const CONFIG_SCHEMA = z.object({
 });
 
 const BODY_SCHEMA = z.object({
-  erp_type: z.enum(['mock', 'ixc', 'sgp', 'hubsoft', 'mk_solutions']),
+  erp_type: z.enum(['mock', 'ixc', 'sgp', 'ispfy', 'hubsoft', 'mk_solutions']),
   // `.strip()` do zod descarta chaves desconhecidas — evita que o form
   // empurre lixo (ou colunas inventadas) pro jsonb.
   erp_config: CONFIG_SCHEMA,

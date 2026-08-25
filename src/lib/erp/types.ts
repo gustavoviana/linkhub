@@ -136,6 +136,12 @@ export type ErpConfig = {
     app: string;            // appName configurado no SGP
     token: string;          // token da integração
   };
+  ispfy?: {
+    /** Endereço com a porta do webservice, ex: https://central.provedor.com.br:8043 */
+    baseUrl: string;
+    /** Token API do usuário do sistema — herda as permissões dele. */
+    token: string;
+  };
   hubsoft?: {
     baseUrl: string;        // ex: https://api.hubsoft.com.br
     clientId: string;

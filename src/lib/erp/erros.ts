@@ -33,7 +33,8 @@ export function ehBloqueioDeIp(bruto: string): boolean {
  */
 export function explicarErroDoErp(erpType: ErpType | string, erro: unknown): string {
   const bruto = erro instanceof Error ? erro.message : String(erro ?? '');
-  const { nome, caminho, credencial } = sistemaDoErp(erpType);
+  const { nome, caminho, credencial, conexaoRecusada, usuarioDaApi, certificado } =
+    sistemaDoErp(erpType);
 
   if (ehBloqueioDeIp(bruto)) {
     return (
@@ -50,7 +51,7 @@ export function explicarErroDoErp(erpType: ErpType | string, erro: unknown): str
     return (
       `O ${nome} recusou a credencial (401). ` +
       (credencial ? `Confira o preenchimento: ${credencial}. ` : '') +
-      `Confirme também se o usuário da API está ativo ${caminho}. ` +
+      `Confirme também se o usuário da API está ativo ${usuarioDaApi ?? caminho}. ` +
       'Se houver restrição de IP no webservice, o IP do servidor precisa estar liberado.'
     );
   }
@@ -74,14 +75,19 @@ export function explicarErroDoErp(erpType: ErpType | string, erro: unknown): str
   }
 
   if (/ECONNREFUSED|ETIMEDOUT|timeout|fetch failed|ECONNRESET|socket hang up/i.test(bruto)) {
-    return (
-      `Não conseguimos conectar no servidor do ${nome}. Ele pode estar fora do ar, ou ` +
-      'bloqueando conexões vindas de fora da rede do provedor.'
-    );
+    // Num ERP que tranca o webservice por firewall, esta é a cara da restrição
+    // de IP: nada responde. Dizer só "pode estar fora do ar" manda o provedor
+    // procurar no lugar errado, então quando o sistema tem essa pegadinha ela
+    // vem escrita junto.
+    return conexaoRecusada
+      ? `Não conseguimos conectar no servidor do ${nome}. ${conexaoRecusada}`
+      : `Não conseguimos conectar no servidor do ${nome}. Ele pode estar fora do ar, ou ` +
+          'bloqueando conexões vindas de fora da rede do provedor.';
   }
 
   if (/certificate|SSL|TLS|CERT_/i.test(bruto)) {
-    return `O certificado HTTPS da central do ${nome} não foi aceito. Confira se ele está válido.`;
+    const base = `O certificado HTTPS da central do ${nome} não foi aceito.`;
+    return certificado ? `${base} ${certificado}` : `${base} Confira se ele está válido.`;
   }
 
   // Sem padrão conhecido, devolve o que o ERP disse — legível, sem HTML cru.

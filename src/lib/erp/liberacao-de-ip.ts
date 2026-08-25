@@ -79,6 +79,26 @@ interface Sistema {
   erro?: string;
   /** Formato da credencial, para orientar quem errou o preenchimento. */
   credencial?: string;
+  /**
+   * Onde o usuário da API é cadastrado, quando não é o mesmo lugar da
+   * liberação de IP. No IXC as duas coisas moram na mesma tela; no ISPFY o
+   * usuário está em Sistema → Usuários e o firewall em outra seção, e mandar
+   * o provedor procurar a credencial dentro do firewall só faz ele rodar.
+   */
+  usuarioDaApi?: string;
+  /**
+   * O que checar quando a conexão nem chega a virar HTTP. Nem todo ERP recusa
+   * respondendo: alguns trancam o webservice num firewall que descarta o
+   * pacote, e aí a restrição de IP se disfarça de servidor fora do ar.
+   */
+  conexaoRecusada?: string;
+  /**
+   * A saída quando o certificado HTTPS não é aceito. "Confira se ele está
+   * válido" é um beco sem saída em ERP que roda no servidor do provedor com
+   * certificado autoassinado — não há como emitir um válido para um host
+   * interno, e o provedor fica sem próximo passo.
+   */
+  certificado?: string;
 }
 
 /** Nome do sistema e onde, dentro dele, a liberação é feita. */
@@ -96,6 +116,25 @@ export const ONDE_LIBERAR: Partial<Record<ErpType, Sistema>> = {
     caminho:
       'nas configurações da API da Central do Assinante, no cadastro do app da integração',
     credencial: 'confira o nome do app e o token da integração',
+  },
+  ispfy: {
+    nome: 'ISPFY',
+    caminho:
+      'no próprio ISPFY, em Sistema → Parâmetros → Rede, aba Firewall, no serviço da API — ' +
+      'e é preciso clicar em "Aplicar firewall" depois de adicionar a network',
+    credencial:
+      'o token é o "Token API" do usuário, em Sistema → Usuários, e o endereço precisa ' +
+      'terminar com a porta do webservice (8043 para HTTPS, 8020 para HTTP)',
+    usuarioDaApi: 'no próprio ISPFY, em Sistema → Usuários',
+    certificado:
+      'Se o servidor usa certificado autoassinado, não há o que corrigir no certificado: troque ' +
+      'o endereço para a porta 8020, em HTTP, e mantenha o firewall do ISPFY liberado apenas ' +
+      'para o nosso endereço — fora do HTTPS o token trafega em texto puro.',
+    conexaoRecusada:
+      'O ISPFY não responde nada quando a origem não está liberada: o firewall dele descarta ' +
+      'a conexão antes de virar requisição, então a falha se parece com servidor fora do ar. ' +
+      'Confira se a network está liberada no serviço da API e se a porta (8043 ou 8020) está ' +
+      'aberta também no servidor onde o ISPFY roda.',
   },
   hubsoft: {
     nome: 'Hubsoft',
