@@ -88,6 +88,40 @@ function parseSpeeds(name?: string): { down: number; up: number } | null {
 }
 
 /**
+ * O grupo do RADIUS é guardado sem espaço ("MR_600_MEGA") porque o valor vai
+ * para o concentrador. Para exibir — e para o parseSpeeds enxergar o número —
+ * o underscore vira espaço.
+ */
+function nomeDoGrupo(bruto: unknown): string {
+  const nome = String(bruto ?? '').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+  return nome || 'Plano';
+}
+
+/**
+ * Velocidade que o nome do grupo anuncia — vale mais que o perfil do RADIUS,
+ * que sempre entrega com margem sobre o vendido. Aceita um dígito só, ao
+ * contrário do parseSpeeds dos contratos: o catálogo guarda plano antigo de
+ * "3 MEGA", e cair no perfil mostraria 30.
+ */
+function velocidadeAnunciada(nome: string): { down: number; up: number } | null {
+  const doContrato = parseSpeeds(nome);
+  if (doContrato) return doContrato;
+  const m = /(\d{1,5})\s*(?:MEGA|MB|MBPS)\b/i.exec(nome);
+  return m ? { down: Number(m[1]), up: Number(m[1]) } : null;
+}
+
+/** Velocidade do perfil do RADIUS: "850M", "9216M", "1G" → Mbps. */
+function parseRadiusSpeed(value: unknown): number | undefined {
+  const m = /^(\d+(?:[.,]\d+)?)\s*([KMG])?/i.exec(String(value ?? '').trim());
+  if (!m) return undefined;
+  const numero = Number(m[1]!.replace(',', '.'));
+  if (!Number.isFinite(numero) || numero <= 0) return undefined;
+  const unidade = (m[2] ?? 'M').toUpperCase();
+  const mbps = unidade === 'G' ? numero * 1000 : unidade === 'K' ? numero / 1000 : numero;
+  return Math.round(mbps) || undefined;
+}
+
+/**
  * O IXC serve o JSON declarando ISO-8859-1 com o texto já em UTF-8, então
  * "não" chega escrito "nÃ£o". Desfaz a dupla codificação quando o resultado é
  * texto válido — senão a mensagem do ERP apareceria embaralhada no painel.
@@ -167,20 +201,41 @@ export class IxcAdapter implements ErpAdapter {
     }
   }
 
+  /**
+   * Catálogo de planos.
+   *
+   * `plano_acesso` não existe no webservice do IXC: pedir esse recurso devolve
+   * "Recurso plano_acesso não está disponível!", exatamente a mesma resposta de
+   * um nome inventado. Como isso era lançado como erro, e o catálogo é a
+   * primeira coisa que a sincronização busca, o provedor inteiro era pulado —
+   * as faturas nunca chegavam, mesmo com o financeiro liberado.
+   *
+   * O que existe é `radgrupos`, o perfil de velocidade do RADIUS. Ele não é o
+   * catálogo comercial: `download`/`upload` são o que o concentrador entrega,
+   * sempre com margem sobre o que foi vendido — o grupo "MR_600_MEGA" sai como
+   * 850M. O número que o assinante reconhece é o do nome, então ele vem
+   * primeiro e o perfil só cobre o grupo que não diz a velocidade no nome.
+   *
+   * O catálogo comercial de verdade fica em `vd_contratos`, que costuma estar
+   * fora das permissões do usuário da API. Enquanto não estiver liberado, esta
+   * é a melhor aproximação que o webservice oferece.
+   */
   async listPlans(): Promise<ErpPlan[]> {
-    const data = await this.req<IxcListResponse<any>>('plano_acesso', {
-      qtype: 'plano_acesso.ativo', query: 'S', oper: '=',
-      page: '1', rp: '500', sortname: 'plano_acesso.id', sortorder: 'asc',
+    const data = await this.req<IxcListResponse<any>>('radgrupos', {
+      qtype: 'radgrupos.id', query: '0', oper: '>',
+      page: '1', rp: '500', sortname: 'radgrupos.id', sortorder: 'asc',
     });
-    return (data.registros ?? []).map((p) => ({
-      externalId: String(p.id),
-      name: p.nome ?? 'Plano',
-      description: p.descricao ?? undefined,
-      downMbps: p.velocidade_down ? Number(p.velocidade_down) : undefined,
-      upMbps: p.velocidade_up ? Number(p.velocidade_up) : undefined,
-      priceCents: Math.round(Number(p.valor ?? 0) * 100),
-      fidelityMonths: p.fidelidade ? Number(p.fidelidade) : undefined,
-    }));
+    return (data.registros ?? []).map((g) => {
+      const name = nomeDoGrupo(g.grupo);
+      const doNome = velocidadeAnunciada(name);
+      return {
+        externalId: String(g.id),
+        name,
+        downMbps: doNome?.down ?? parseRadiusSpeed(g.download),
+        upMbps: doNome?.up ?? parseRadiusSpeed(g.upload),
+        priceCents: Math.round(Number(g.valor_produto ?? 0) * 100),
+      };
+    });
   }
 
   async findCustomerByCpf(cpf: string): Promise<ErpCustomer | null> {
@@ -418,20 +473,26 @@ export class IxcAdapter implements ErpAdapter {
   }
 
   async getInvoice(invoiceExternalId: string): Promise<ErpInvoice | null> {
+    // O prefixo do qtype é o nome da tabela. Com "fn." o IXC responde sem
+    // erro e sem `registros`, então esta consulta devolvia null para toda
+    // fatura que existia — o mesmo tropeço já corrigido em
+    // listInvoicesByContract, que tinha passado batido aqui.
     const data = await this.req<IxcListResponse<any>>('fn_areceber', {
-      qtype: 'fn.id', query: invoiceExternalId, oper: '=', page: '1', rp: '1',
+      qtype: 'fn_areceber.id', query: invoiceExternalId, oper: '=', page: '1', rp: '1',
     });
     const f = data.registros?.[0];
     if (!f) return null;
+    const due = toIsoDate(f.data_vencimento);
     return {
       externalId: String(f.id),
       contractExternalId: String(f.id_contrato),
-      dueDate: f.data_vencimento,
+      dueDate: due,
       amountCents: Math.round(Number(f.valor ?? 0) * 100),
-      status: this.mapInvoiceStatus(f.status),
-      pixCopyPaste: f.pix_copia_cola ?? undefined,
-      boletoLine: f.linha_digitavel ?? undefined,
-      boletoPdfUrl: f.url_boleto ?? undefined,
+      // Sem a data, "vencida" viraria "em aberto" — é a data que decide.
+      status: this.mapInvoiceStatus(f.status, due),
+      pixCopyPaste: f.pix_copia_cola || undefined,
+      boletoLine: f.linha_digitavel || undefined,
+      boletoPdfUrl: f.url_boleto || undefined,
     };
   }
 

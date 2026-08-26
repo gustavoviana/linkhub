@@ -99,6 +99,14 @@ interface Sistema {
    * interno, e o provedor fica sem próximo passo.
    */
   certificado?: string;
+  /**
+   * Onde as permissões de consulta do usuário da API são concedidas, quando o
+   * ERP separa "pode usar a API" de "pode ver esta tabela". No IXC a API herda
+   * as permissões do grupo do usuário do token: o token autentica, e cada
+   * recurso é barrado individualmente. Sem isso a tela mostrava só a recusa
+   * crua do ERP, que não diz onde arrumar.
+   */
+  permissao?: string;
 }
 
 /** Nome do sistema e onde, dentro dele, a liberação é feita. */
@@ -110,6 +118,10 @@ export const ONDE_LIBERAR: Partial<Record<ErpType, Sistema>> = {
     credencial:
       'o token precisa ser o Base64 de "usuario:chave" — se você tem os dois separados, ' +
       'pode colar no formato usuario:chave que o LinkHub codifica',
+    permissao:
+      'em Configurações → Usuários → Grupos de usuários, no grupo do usuário que gerou o ' +
+      'token. A API do IXC usa as mesmas permissões de um usuário logado, então o recurso ' +
+      'precisa estar liberado para consulta nesse grupo',
   },
   sgp: {
     nome: 'SGP',

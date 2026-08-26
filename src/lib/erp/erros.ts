@@ -33,7 +33,7 @@ export function ehBloqueioDeIp(bruto: string): boolean {
  */
 export function explicarErroDoErp(erpType: ErpType | string, erro: unknown): string {
   const bruto = erro instanceof Error ? erro.message : String(erro ?? '');
-  const { nome, caminho, credencial, conexaoRecusada, usuarioDaApi, certificado } =
+  const { nome, caminho, credencial, conexaoRecusada, usuarioDaApi, certificado, permissao } =
     sistemaDoErp(erpType);
 
   if (ehBloqueioDeIp(bruto)) {
@@ -44,6 +44,32 @@ export function explicarErroDoErp(erpType: ErpType | string, erro: unknown): str
       'consulta com a recusa no lugar dos dados. O ajuste é feito ' +
       `${caminho}. Use o quadro "Liberação de IP no seu ERP", abaixo, para mandar o pedido ` +
       'pronto ao suporte.'
+    );
+  }
+
+  // O ERP aceitou a credencial e barrou o recurso. No IXC a API roda com as
+  // permissões do grupo do usuário do token, então cada tabela é liberada em
+  // separado — o token pode estar perfeito e a consulta voltar recusada. Vem
+  // antes do 401 pelo mesmo motivo que a restrição de IP: a credencial já
+  // passou, e tratar isso como token errado mandava o provedor trocar uma
+  // chave que estava certa.
+  const semPermissao = /n[ãa]o tem permiss[ãa]o para acessar o recurso\s*:?\s*([\w.]+)/i.exec(bruto);
+  if (semPermissao) {
+    return (
+      `O ${nome} aceitou a credencial e recusou o recurso "${semPermissao[1]}": o usuário da ` +
+      'API autentica, mas não tem permissão de consulta nessa tabela. O token está certo — o ' +
+      `que falta é a permissão, liberada ${permissao ?? caminho}.`
+    );
+  }
+
+  // Recurso que a instalação não expõe. Não é credencial nem permissão, e não
+  // há nada que o provedor possa ajustar no ERP dele — o ajuste é do nosso
+  // lado, então a mensagem para de mandá-lo procurar.
+  if (/recurso\s+[\w.]+\s+n[ãa]o est[áa] dispon[íi]vel/i.test(bruto)) {
+    return (
+      `O ${nome} não oferece esse recurso no webservice desta instalação. Não é o seu token ` +
+      'nem permissão faltando: a consulta usa um endereço que essa versão do ERP não expõe. ' +
+      'O ajuste é na integração — avise o suporte do LinkHub.'
     );
   }
 

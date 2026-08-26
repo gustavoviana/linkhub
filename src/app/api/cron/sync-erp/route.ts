@@ -78,7 +78,21 @@ export async function GET(req: NextRequest) {
     const adapter = getAdapterForTenant(tenant);
     try {
       // 1. Catálogo de planos.
-      const plans = await adapter.listPlans();
+      //
+      // O catálogo é acessório: o portal já deriva o plano do contrato quando
+      // não encontra um cadastrado. As faturas é que o assinante abre todo
+      // mês. Enquanto isso morava no mesmo try, um catálogo indisponível —
+      // recurso que o ERP não expõe, permissão faltando no usuário da API —
+      // pulava o provedor inteiro e as faturas nunca sincronizavam. Agora a
+      // falha do catálogo fica registrada e a sincronização segue.
+      let plans: Awaited<ReturnType<typeof adapter.listPlans>> = [];
+      let planError: string | null = null;
+      try {
+        plans = await adapter.listPlans();
+      } catch (e) {
+        planError = e instanceof Error ? e.message : String(e);
+        console.error(`[sync-erp] catálogo de planos falhou em ${tenant.slug}`, e);
+      }
       for (const p of plans) {
         await admin.from('plans').upsert(
           {
@@ -134,16 +148,24 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      // Catálogo falhado com faturas sincronizadas não é sucesso nem erro:
+      // dizer "ok" esconderia do provedor um recurso que ele precisa liberar,
+      // e dizer "erro" faria ele procurar uma pane que não existe.
       await admin
         .from('tenants')
         .update({
           erp_last_sync_at: new Date().toISOString(),
-          erp_last_sync_status: 'ok',
-          erp_last_sync_error: null,
+          erp_last_sync_status: planError ? 'parcial' : 'ok',
+          erp_last_sync_error: planError ? planError.slice(0, 500) : null,
         } as never)
         .eq('id', tenant.id);
 
-      report.push({ tenant: tenant.slug, plans: plans.length, invoices: invoiceCount });
+      report.push({
+        tenant: tenant.slug,
+        plans: plans.length,
+        invoices: invoiceCount,
+        ...(planError ? { error: `catálogo de planos: ${planError}` } : {}),
+      });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       // Erro de um provedor não pode parar a fila dos outros.
