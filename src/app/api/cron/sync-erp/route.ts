@@ -110,12 +110,19 @@ export async function GET(req: NextRequest) {
         );
       }
 
-      // 2. Faturas dos contratos ativos — é o dado que envelhece mais rápido.
+      // 2. Faturas — o dado que envelhece mais rápido.
+      //
+      // Isto sincronizava só contrato `active`, e era o filtro errado: quem
+      // está suspenso foi cortado por falta de pagamento, ou seja, é
+      // justamente quem tem fatura em aberto para ver e pagar. Some com a
+      // fatura de quem mais precisa dela — e, junto com um status que o
+      // adapter não soubesse traduzir, tirava o contrato da fila para sempre.
+      // Fora `cancelled`, que não gera cobrança nova, todo contrato entra.
       const { data: contracts } = await admin
         .from('contracts')
         .select('id, external_id')
         .eq('tenant_id', tenant.id)
-        .eq('status', 'active')
+        .neq('status', 'cancelled')
         .limit(500);
 
       let invoiceCount = 0;

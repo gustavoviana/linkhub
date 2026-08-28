@@ -96,11 +96,45 @@ export interface ErpInvoice {
   paidMethod?: string;
 }
 
+/**
+ * Resultado da consulta a um recurso do ERP, um por linha do diagnóstico.
+ *
+ * `testConnection` responde sim/não para a integração inteira a partir de uma
+ * única consulta de cadastro. Isso basta para "o token está certo?" e não serve
+ * para nada além disso: nos ERPs que liberam permissão por tabela — o IXC é um
+ * — cadastro, financeiro e RADIUS são grupos separados, e a central some com o
+ * gráfico e com as faturas enquanto o painel exibe "Conexão OK". Cada recurso
+ * precisa responder por si.
+ */
+export interface ErpCheck {
+  /** Recurso consultado, com o nome que o ERP usa — é o que o suporte libera. */
+  resource: string;
+  /** O que para de funcionar na central quando este recurso não responde. */
+  feature: string;
+  /**
+   * `ok`: respondeu e trouxe registro. `vazio`: aceitou a consulta e não achou
+   * nada — legítimo para quem não tem fatura, suspeito para quem tem.
+   * `recusado`: não deixou consultar.
+   */
+  status: 'ok' | 'vazio' | 'recusado';
+  /** Quantos registros vieram, quando a consulta foi aceita. */
+  records?: number;
+  /** Por que foi recusado, ou o que o "vazio" significa aqui. */
+  detail?: string;
+}
+
 export interface ErpAdapter {
   name: string;
 
   /** Testa credenciais. Útil pro admin antes de salvar. */
   testConnection(): Promise<{ ok: boolean; message?: string }>;
+
+  /**
+   * Consulta recurso por recurso e conta o que cada um respondeu. Com o CPF de
+   * um assinante, repete as consultas exatamente como a central faz para ele —
+   * é o que separa "o ERP não deixa consultar" de "não há o que mostrar".
+   */
+  diagnose?(cpf?: string): Promise<ErpCheck[]>;
 
   listPlans(): Promise<ErpPlan[]>;
   findCustomerByCpf(cpf: string): Promise<ErpCustomer | null>;

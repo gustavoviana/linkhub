@@ -7,6 +7,7 @@ import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { Tenant, ErpType } from '@/lib/supabase/types';
+import type { ErpCheck } from '@/lib/erp/types';
 import type { MaskedErpConfig } from '@/lib/erp/crypto';
 import { mensagemDeLiberacao } from '@/lib/erp/liberacao-de-ip';
 import { instrucoesDoErp } from '@/lib/erp/instrucoes';
@@ -106,6 +107,16 @@ export default function ErpForm({
   // estava tudo certo: o painel não mostrava nada, e o erro só aparecia para o
   // assinante, escrito como se o CPF dele estivesse errado.
   const [checando, setChecando] = useState(false);
+  // "Conexão OK" responde por uma tabela de cadastro e era lido como se
+  // valesse pela integração inteira. O diagnóstico pergunta recurso por
+  // recurso: é o que mostra o financeiro ou o RADIUS recusados enquanto o
+  // resto responde — o estado exato em que a central perde as faturas e o
+  // gráfico de consumo sem nada aparecer no painel.
+  const [checks, setChecks] = useState<ErpCheck[] | null>(null);
+  const [diagnosticando, setDiagnosticando] = useState(false);
+  const [erroDiagnostico, setErroDiagnostico] = useState<string | null>(null);
+  const [cpfTeste, setCpfTeste] = useState('');
+  const [detalhado, setDetalhado] = useState(true);
 
   function updateCfg(key: string, value: string) {
     setCfg((c: any) => ({ ...c, [type]: { ...(c[type] ?? {}), [key]: value } }));
@@ -192,6 +203,35 @@ export default function ErpForm({
     }
   }
 
+  // Consulta cada recurso do ERP em separado e mostra o que cada um respondeu.
+  // Com um CPF, refaz o caminho inteiro daquele assinante — é o que distingue
+  // "o ERP não deixa consultar" de "não há o que mostrar", as duas causas que
+  // produzem exatamente a mesma tela vazia para o cliente.
+  async function rodarDiagnostico() {
+    setDiagnosticando(true);
+    setErroDiagnostico(null);
+    setChecks(null);
+    try {
+      const r = await fetch(`/api/tenants/${tenant.id}/erp/diagnostico`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cpfTeste }),
+      });
+      if (!r.ok) {
+        const corpo = await r.json().catch(() => null);
+        setErroDiagnostico(corpo?.erro ?? (await r.text().catch(() => '')) ?? 'Falha ao diagnosticar.');
+        return;
+      }
+      const corpo = await r.json();
+      setChecks(corpo.checks ?? []);
+      setDetalhado(corpo.detalhado !== false);
+    } catch {
+      setErroDiagnostico('Não conseguimos falar com o servidor para rodar o diagnóstico.');
+    } finally {
+      setDiagnosticando(false);
+    }
+  }
+
   // Só vale checar a integração que está salva: enquanto o admin passeia pela
   // lista de ERPs, o que está na tela ainda não é a configuração do provedor.
   const integracaoSalva =
@@ -217,8 +257,15 @@ export default function ErpForm({
           ? {
               estado: 'ok',
               texto:
-                'O seu ERP respondeu e aceitou a credencial. As consultas dos assinantes ' +
-                'estão chegando ao sistema.',
+                // A segunda frase daqui dizia que "as consultas dos assinantes estão
+                // chegando ao sistema" — e essa checagem consulta o cadastro, nada
+                // mais. Num ERP que libera permissão por tabela, o financeiro e o
+                // RADIUS podem estar recusados com esta mesma resposta verde: era o
+                // painel afirmando o que não tinha verificado, enquanto a central
+                // ficava sem fatura e sem gráfico.
+                'O seu ERP respondeu e aceitou a credencial. Isso cobre o cadastro — ' +
+                'para saber se as faturas e o consumo também estão liberados, rode o ' +
+                'diagnóstico da integração abaixo.',
             }
           : { estado: 'falha', texto: testResult.message ?? 'O seu ERP recusou a chamada.' }
         : ultimaSync.erro
@@ -482,10 +529,109 @@ export default function ErpForm({
                     testResult.ok ? 'text-success' : 'text-danger',
                   )}
                 >
-                  {testResult.ok ? '✓ Conexão OK' : `✗ ${testResult.message}`}
+                  {/* "Conexão OK" prometia demais: esta chamada consulta o
+                      cadastro e mais nada. Dizer o que foi testado é o que
+                      evita ler um visto verde como se o financeiro e o RADIUS
+                      também estivessem respondendo. */}
+                  {testResult.ok ? '✓ Credencial aceita' : `✗ ${testResult.message}`}
                 </span>
               )}
             </div>
+          </CardBody>
+        </Card>
+      )}
+
+      {type !== 'mock' && integracaoSalva && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Diagnóstico da integração</CardTitle>
+            <CardSubtitle>
+              A credencial aceita responde por uma consulta de cadastro só. Vários ERPs
+              liberam permissão tabela por tabela — no IXC, financeiro e RADIUS são
+              grupos separados do cadastro —, então o resto pode estar recusado com a
+              credencial certa. Quando isso acontece, o assinante vê a central sem
+              faturas e sem gráfico de consumo, e nada aparece aqui. Este quadro
+              pergunta a cada recurso em separado.
+            </CardSubtitle>
+          </CardHeader>
+          <CardBody className="space-y-4">
+            <div className="flex flex-wrap gap-2 items-end">
+              <Field
+                label="CPF de um assinante (opcional)"
+                hint="Com um CPF real, refaz o caminho inteiro daquele cliente — cadastro, contrato, faturas e consumo — do jeito que a central faz."
+              >
+                <Input
+                  value={cpfTeste}
+                  onChange={(e) => setCpfTeste(e.target.value)}
+                  placeholder="000.000.000-00"
+                />
+              </Field>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={rodarDiagnostico}
+                loading={diagnosticando}
+              >
+                Rodar diagnóstico
+              </Button>
+            </div>
+
+            {erroDiagnostico && (
+              <p className="text-sm text-danger leading-relaxed">{erroDiagnostico}</p>
+            )}
+
+            {checks && checks.length === 0 && (
+              <p className="text-sm text-fg-2 leading-relaxed">
+                O diagnóstico não devolveu nenhuma linha.
+              </p>
+            )}
+
+            {checks && checks.length > 0 && (
+              <div className="space-y-2">
+                {checks.map((c, i) => (
+                  <div
+                    key={`${c.resource}-${i}`}
+                    className={cn(
+                      'rounded-md border px-3.5 py-3 text-sm leading-relaxed',
+                      c.status === 'recusado' && 'border-danger/30 bg-danger/10',
+                      c.status === 'vazio' && 'border-border bg-bg-3/50',
+                      c.status === 'ok' && 'border-border bg-success/10',
+                    )}
+                  >
+                    <div className="flex items-start gap-2 flex-wrap">
+                      <span className="font-medium text-fg">
+                        {c.status === 'ok' && '✓'}
+                        {c.status === 'vazio' && '—'}
+                        {c.status === 'recusado' && '✗'} {c.feature}
+                      </span>
+                      <code className="px-1.5 py-0.5 rounded bg-bg-3 text-fg-2 text-xs">
+                        {c.resource}
+                      </code>
+                      {c.status === 'ok' && typeof c.records === 'number' && (
+                        <span className="text-xs text-fg-2">
+                          {c.records === 1 ? '1 registro' : `${c.records} registros`}
+                        </span>
+                      )}
+                    </div>
+                    {c.detail && <p className="mt-1 text-fg-2">{c.detail}</p>}
+                  </div>
+                ))}
+                {!detalhado && (
+                  <p className="text-xs text-fg-2 leading-relaxed">
+                    Este ERP ainda não tem diagnóstico por recurso — a linha acima cobre
+                    só a credencial.
+                  </p>
+                )}
+                {detalhado && checks.some((c) => c.status === 'recusado') && (
+                  <p className="text-xs text-fg-2 leading-relaxed">
+                    Cada recurso recusado acima é liberado no ERP, no grupo de permissões
+                    do usuário da API — não é troca de token. Leve para o suporte do seu
+                    ERP o nome que aparece em cinza.
+                  </p>
+                )}
+              </div>
+            )}
           </CardBody>
         </Card>
       )}
