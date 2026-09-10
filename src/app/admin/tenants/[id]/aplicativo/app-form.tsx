@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { CopyLink } from '../copy-link';
 import type { Tenant } from '@/lib/supabase/types';
 import type { AppBuild, TenantApp } from '@/lib/tenant/app-config';
 import { cn } from '@/lib/utils';
@@ -301,6 +302,54 @@ export default function AppForm({
             <p className="text-xs text-fg-3 font-mono break-all">
               Chave de upload: {app.keystore_sha256}
             </p>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Documentos para as lojas</CardTitle>
+          <CardSubtitle>
+            Publicados no domínio de {tenant.name}, sempre atualizados com o cadastro
+          </CardSubtitle>
+        </CardHeader>
+        <CardBody className="space-y-5">
+          <div>
+            <Label>Política de privacidade</Label>
+            <CopyLink url={`${origin}/privacidade`} />
+            <p className="text-xs text-fg-2 mt-2 leading-relaxed">
+              Obrigatória nas duas lojas, e o item que mais atrasa envio. Cole este endereço no
+              campo de política de privacidade da Play e da App Store — não precisa publicar
+              nada em outro lugar.
+            </p>
+          </div>
+
+          <div>
+            <Label>Termos de uso</Label>
+            <CopyLink url={`${origin}/termos`} />
+            <p className="text-xs text-fg-2 mt-2 leading-relaxed">
+              Opcional nas lojas, mas a Play tem campo para ele — e app que mostra cobrança sem
+              regras escritas chama atenção na revisão.
+            </p>
+          </div>
+
+          {(!tenant.cnpj || !tenant.support_email) && (
+            <div className="text-xs leading-relaxed rounded-md bg-warning/10 border border-warning/25 p-3">
+              <span className="font-semibold">Complete o cadastro antes de enviar às lojas.</span>{' '}
+              {[!tenant.cnpj && 'o CNPJ', !tenant.support_email && 'o e-mail de suporte']
+                .filter(Boolean)
+                .join(' e ')}{' '}
+              {!tenant.cnpj && !tenant.support_email ? 'estão' : 'está'} em branco em{' '}
+              <Link
+                href={`/admin/tenants/${tenant.id}/configuracoes`}
+                className="text-brand hover:underline"
+              >
+                Configurações
+              </Link>
+              . As páginas continuam no ar sem esses dados — a frase se reorganiza sem eles —,
+              mas a Play cobra o CNPJ da empresa responsável e a LGPD exige um canal de contato
+              do titular dos dados.
+            </div>
           )}
         </CardBody>
       </Card>

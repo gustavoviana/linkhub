@@ -36,9 +36,9 @@ export interface GuideStep {
 export const PRE_REQUISITOS: { id: string; text: string; detail: string }[] = [
   {
     id: 'pre-privacidade',
-    text: 'Política de privacidade publicada numa URL pública',
+    text: 'Política de privacidade e termos de uso publicados',
     detail:
-      'Obrigatória nas duas lojas, e é o item que mais atrasa envio. O texto pronto está no fim desta página — publique numa página do site do provedor e guarde o endereço.',
+      'Já resolvido pela central: os dois ficam no ar em /privacidade e /termos, no domínio do provedor, montados a partir do cadastro e sempre atualizados. Os endereços prontos para colar estão na aba Aplicativo. Quem preferir hospedar no site da empresa ainda encontra o texto no fim desta página.',
   },
   {
     id: 'pre-imagens',
@@ -209,8 +209,13 @@ export function playSteps(c: StoreCopyContext): GuideStep[] {
             { field: 'Site', value: c.origin, why: 'O endereço da central do provedor.' },
             {
               field: 'Política de privacidade',
-              value: 'URL pública, no domínio da empresa',
-              why: 'Sem ela a revisão nem começa. O texto pronto está no fim desta página.',
+              value: `${c.origin}/privacidade`,
+              why: 'Sem ela a revisão nem começa. A central já publica esta página no domínio do provedor — é só colar o endereço.',
+            },
+            {
+              field: 'Termos de uso',
+              value: `${c.origin}/termos`,
+              why: 'Campo opcional da Play, mas ele existe e a página já está no ar.',
             },
           ],
         },

@@ -68,8 +68,11 @@ function blocoDeContatos(c: StoreCopyContext) {
 }
 
 /** E-mail que vai nos textos jurídicos — sem contato cadastrado, vira um aviso. */
-function emailOuAviso(c: StoreCopyContext) {
-  return c.supportEmail ?? '[cadastre o e-mail de suporte em Configurações]';
+function emailOuAviso(c: StoreCopyContext, hospedada = false) {
+  if (c.supportEmail) return c.supportEmail;
+  // Marcador serve para quem vai copiar e colar. Na página pública quem lê é
+  // o assinante e o revisor da loja: ali a frase aponta para o atendimento.
+  return hospedada ? `${c.origin}/suporte` : '[cadastre o e-mail de suporte em Configurações]';
 }
 
 function descricaoCompleta(c: StoreCopyContext) {
@@ -103,11 +106,15 @@ function descricaoBreve(c: StoreCopyContext) {
   return comMarca.length <= 80 ? comMarca : 'Suas faturas, o código Pix e o suporte da sua internet na palma da mão.';
 }
 
-function politicaDePrivacidade(c: StoreCopyContext) {
-  const email = emailOuAviso(c);
+/** @param hospedada Página pública em /privacidade, onde marcador entre
+ *  colchetes não pode aparecer — sem o dado, a frase se reorganiza sem ele. */
+export function politicaDePrivacidade(c: StoreCopyContext, hospedada = false) {
+  const email = emailOuAviso(c, hospedada);
   const identificacao = c.cnpj
     ? `${c.legalName}, inscrita no CNPJ sob o nº ${c.cnpj}`
-    : `${c.legalName} [complete com o CNPJ]`;
+    : hospedada
+      ? c.legalName
+      : `${c.legalName} [complete com o CNPJ]`;
 
   return `POLÍTICA DE PRIVACIDADE — APLICATIVO ${c.appName.toUpperCase()}
 
@@ -311,7 +318,7 @@ export function buildStoreCopy(c: StoreCopyContext): StoreCopySet {
       {
         id: 'privacidade',
         label: 'Política de privacidade',
-        hint: 'As duas lojas exigem uma URL pública. Publique este texto numa página do site da empresa e use o endereço dela nas duas fichas. Passe antes pelo jurídico do provedor: o modelo cobre o que a central faz hoje, não o que a empresa faz fora dela.',
+        hint: 'Já publicado: a central serve este texto em /privacidade, no domínio do provedor, e é esse endereço que vai na ficha das duas lojas — o campo com o link está na aba Aplicativo. Este bloco fica para quem preferir hospedar no próprio site. Passe pelo jurídico do provedor: o modelo cobre o que a central faz hoje, não o que a empresa faz fora dela.',
         text: politicaDePrivacidade(c),
       },
     ],
