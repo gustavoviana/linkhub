@@ -34,11 +34,12 @@ humana, na ordem em que trava as coisas:
       daqui — a rota exige sessão de admin. Basta clicar em "Gerar imagens
       das lojas" em Marca & visual. Se aparecer estouro de memória em vez do
       erro antigo, a saída é `BROWSER_WS_ENDPOINT` (o código já usa).
-- [ ] **Rodar a migração 006** — a própria aba Aplicativo mostra o SQL com
-      botão de copiar.
-- [ ] **Criar `GITHUB_DISPATCH_TOKEN`** na Vercel.
-- [ ] **Instalar o workflow** copiando `docs/ci/android-build.yml` para
-      `.github/workflows/android-build.yml` (detalhes no passo 3 abaixo).
+- [x] **Rodar a migração 006** — feito; `tenant_apps` e `tenant_app_builds`
+      já respondem no banco.
+- [ ] **Criar `GITHUB_DISPATCH_TOKEN`** na Vercel. É o único item que ainda
+      falta para o botão de build funcionar (passo 2 abaixo).
+- [x] **Instalar o workflow** — já está em `.github/workflows/android-build.yml`
+      na `main`.
 - [ ] **Primeiro build Android de verdade.** O projeto TWA foi gerado e
       conferido aqui, mas o Gradle nunca compilou — esta máquina não tem SDK
       do Android e está com JDK 24, que o AGP não aceita. O primeiro build
@@ -93,20 +94,17 @@ vercel env add GITHUB_DISPATCH_TOKEN production
 Opcionais, se um dia mudar de repositório ou branch: `GITHUB_BUILD_REPO`,
 `GITHUB_BUILD_WORKFLOW`, `GITHUB_BUILD_REF`.
 
-**3. Instalar o workflow.** O arquivo está versionado em
-`docs/ci/android-build.yml`, e não em `.github/workflows/`, porque o token que
-empurra este repositório não tem escopo `workflow` — o GitHub recusa o push de
-arquivos de CI vindos dele. Duas saídas, ambas de um minuto:
+**3. O workflow já está instalado.** Ele vive em
+`.github/workflows/android-build.yml`, na `main` — que é onde o
+`workflow_dispatch` precisa estar para a API conseguir disparar. Durante um
+tempo o arquivo ficou parado em `docs/ci/` porque o token que empurrava este
+repositório não tinha escopo `workflow`; isso foi resolvido e ele voltou para o
+lugar certo.
 
-- **Pelo site**: no GitHub, *Add file → Create new file*, nome
-  `.github/workflows/android-build.yml`, cole o conteúdo de
-  `docs/ci/android-build.yml`, commit na `main`.
-- **Pelo terminal**: gere um token com escopo `workflow`, depois
-  `mkdir -p .github/workflows && cp docs/ci/android-build.yml .github/workflows/`
-  e `git push`.
-
-Sem esse arquivo na `main`, o botão de build responde que o GitHub recusou o
-disparo.
+Se um dia o botão responder que o GitHub recusou o disparo, confira nesta
+ordem: o arquivo existe na `main`, o token da Vercel tem **Actions: read and
+write** neste repositório, e `GITHUB_BUILD_WORKFLOW` (se estiver definida)
+aponta para `android-build.yml`.
 
 ---
 
