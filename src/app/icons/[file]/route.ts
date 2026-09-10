@@ -51,6 +51,22 @@ function fallbackMark(size: number) {
   );
 }
 
+/** Cor de fundo da própria arte: o pixel do canto, achatado sobre branco.
+ *  É o que permite devolver um ícone quadrado sem moldura — a sobra de
+ *  enquadramento sai na mesma cor do fundo que o provedor desenhou. */
+async function corDaArte(origem: Buffer): Promise<string> {
+  try {
+    const { data } = await sharp(origem)
+      .flatten({ background: '#ffffff' })
+      .extract({ left: 0, top: 0, width: 1, height: 1 })
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    return `rgb(${data[0] ?? 255}, ${data[1] ?? 255}, ${data[2] ?? 255})`;
+  } catch {
+    return '#ffffff';
+  }
+}
+
 export async function GET(req: Request, { params }: { params: Promise<{ file: string }> }) {
   const { file } = await params;
   const spec = SIZES[file];
@@ -67,28 +83,63 @@ export async function GET(req: Request, { params }: { params: Promise<{ file: st
   // 60% centrais. No ícone normal ela pode usar quase toda a área.
   const inner = Math.round(size * (maskable ? 0.58 : 0.78));
 
-  let mark: Buffer | null = null;
+  let original: Buffer | null = null;
   if (source) {
     try {
       const res = await fetch(source, { cache: 'no-store' });
-      if (res.ok) {
-        mark = await sharp(Buffer.from(await res.arrayBuffer()))
-          .resize({ width: inner, height: inner, fit: 'inside', withoutEnlargement: false })
-          .png()
-          .toBuffer();
-      }
+      if (res.ok) original = Buffer.from(await res.arrayBuffer());
     } catch {
-      mark = null;
+      original = null;
     }
   }
-  if (!mark) {
-    mark = await sharp(fallbackMark(inner)).png().toBuffer();
-  }
 
-  const png = await sharp(backdrop(size, tenant.primary_color, tenant.accent_color))
-    .composite([{ input: mark, gravity: 'center' }])
-    .png()
-    .toBuffer();
+  // Imagem quadrada é ícone pronto: o provedor já desenhou o fundo dele.
+  // Encaixá-la a 78% sobre o gradiente da marca desenhava uma moldura
+  // colorida em volta da arte — que é exatamente o que ninguém pediu.
+  // Deitada é outra história: sem fundo atrás ela fica perdida no quadrado
+  // do Android, e aí o gradiente continua sendo a resposta certa.
+  const meta = original ? await sharp(original).metadata().catch(() => null) : null;
+  const larg = meta?.width ?? 0;
+  const alt = meta?.height ?? 0;
+  const quadrada = larg > 0 && alt > 0 && Math.abs(larg / alt - 1) <= 0.1;
+
+  let png: Buffer;
+
+  if (original && quadrada) {
+    const fundo = await corDaArte(original);
+    if (maskable) {
+      // O Android recorta em círculo: a arte recua para a zona segura, mas
+      // sobre a cor do próprio fundo dela — sem anel de outra cor.
+      const arte = await sharp(original)
+        .resize({ width: inner, height: inner, fit: 'contain', background: fundo })
+        .png()
+        .toBuffer();
+      png = await sharp({
+        create: { width: size, height: size, channels: 4, background: fundo },
+      })
+        .composite([{ input: arte, gravity: 'center' }])
+        .png()
+        .toBuffer();
+    } else {
+      png = await sharp(original)
+        .resize({ width: size, height: size, fit: 'contain', background: fundo })
+        .png()
+        .toBuffer();
+    }
+  } else {
+    const mark = original
+      ? await sharp(original)
+          .resize({ width: inner, height: inner, fit: 'inside', withoutEnlargement: false })
+          .png()
+          .toBuffer()
+          .catch(() => null)
+      : null;
+
+    png = await sharp(backdrop(size, tenant.primary_color, tenant.accent_color))
+      .composite([{ input: mark ?? (await sharp(fallbackMark(inner)).png().toBuffer()), gravity: 'center' }])
+      .png()
+      .toBuffer();
+  }
 
   return new NextResponse(new Uint8Array(png), {
     headers: {

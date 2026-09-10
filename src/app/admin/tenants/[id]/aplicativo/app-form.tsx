@@ -42,6 +42,10 @@ export default function AppForm({
     theme_color: app.theme_color ?? tenant.primary_color,
     play_signing_sha256: app.play_signing_sha256 ?? '',
   });
+  // Quadrada = ícone pronto, e é assim que a rota /icons o entrega: inteiro,
+  // sem o gradiente da marca atrás. O preview segue a mesma regra para não
+  // prometer uma coisa e o celular mostrar outra.
+  const [iconeQuadrado, setIconeQuadrado] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [building, setBuilding] = useState(false);
@@ -173,12 +177,28 @@ export default function AppForm({
           <div>
             <Label>Ícone do aplicativo</Label>
             <div className="flex items-start gap-4">
-              <div className="w-20 h-20 shrink-0 rounded-2xl overflow-hidden border border-border flex items-center justify-center"
-                style={{ background: `linear-gradient(135deg, ${tenant.primary_color}, ${tenant.accent_color})` }}
+              <div
+                className="w-20 h-20 shrink-0 rounded-2xl overflow-hidden border border-border flex items-center justify-center"
+                style={
+                  iconPreview && iconeQuadrado
+                    ? undefined
+                    : { background: `linear-gradient(135deg, ${tenant.primary_color}, ${tenant.accent_color})` }
+                }
               >
                 {iconPreview ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={iconPreview} alt="" className="w-[78%] h-[78%] object-contain" />
+                  <img
+                    key={iconPreview}
+                    src={iconPreview}
+                    alt=""
+                    onLoad={(e) => {
+                      const el = e.currentTarget;
+                      setIconeQuadrado(
+                        el.naturalHeight > 0 && Math.abs(el.naturalWidth / el.naturalHeight - 1) <= 0.1,
+                      );
+                    }}
+                    className={iconeQuadrado ? 'w-full h-full object-contain' : 'w-[78%] h-[78%] object-contain'}
+                  />
                 ) : (
                   <span className="text-white text-2xl font-bold">
                     {tenant.name[0]?.toUpperCase()}
@@ -219,8 +239,9 @@ export default function AppForm({
                 </div>
                 <p className="text-xs text-fg-2 mt-2 leading-relaxed">
                   Sem imagem aqui, o ícone sai da marca já cadastrada — ícone do navegador, ou a
-                  logo. Quadrada e a partir de 512×512 fica melhor: logo deitada encolhe muito
-                  dentro do quadrado do Android.
+                  logo. <strong className="font-semibold">Imagem quadrada entra inteira, do jeito que
+                  você enviou</strong>, a partir de 512×512. Logo deitada não preenche o quadrado do
+                  Android, então ela é centralizada sobre as cores da marca.
                 </p>
               </div>
             </div>
