@@ -9,6 +9,7 @@ import { HomeV1 } from '@/components/portal/home-v1';
 import { HomeV2 } from '@/components/portal/home-v2';
 import { HomeV3 } from '@/components/portal/home-v3';
 import { WebDashboard } from '@/components/portal/web-dashboard';
+import { InstallPrompt } from '@/components/portal/install-prompt';
 import type { Contract, Invoice, Plan, Tenant } from '@/lib/supabase/types';
 import type { ErpAdapter, ErpConnection, ErpUsagePoint } from '@/lib/erp/types';
 
@@ -239,6 +240,12 @@ export default async function PortalHome() {
       {/* Desktop: painel completo, com KPIs e histórico lado a lado. */}
       <div className="hidden lg:block">
         <WebDashboard {...props} />
+      </div>
+      {/* Convite para instalar na tela inicial. Só no celular e só aqui: quem
+          abriu as faturas está resolvendo outra coisa, e interromper para
+          pedir instalação é o que faz o convite virar propaganda. */}
+      <div className="lg:hidden">
+        <InstallPrompt tenant={tenant} />
       </div>
     </PortalShell>
   );
