@@ -13,6 +13,7 @@ import { LOGIN_HEADLINE_PADRAO, LOGIN_SUBTITLE_PADRAO } from '@/lib/portal/login
 import { PhonePreview } from './phone-preview';
 import { StoreExport } from './store-export';
 import { cn } from '@/lib/utils';
+import { PageHeader } from '@/components/admin/page-header';
 
 const COLOR_PRESETS = [
   { name: 'Roxo (padrão)', primary: '#6d4ae0', accent: '#0aa5c0' },
@@ -187,8 +188,13 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="p-8">
-      <div className="flex flex-col-reverse xl:flex-row xl:items-start gap-8">
+    <form onSubmit={onSubmit}>
+      <PageHeader
+        eyebrow="Configuração"
+        title="Marca & visual"
+        description="Logo, cores e layout da central. A prévia ao lado mostra como o seu assinante vai ver."
+      />
+      <div className="px-6 lg:px-8 py-6 flex flex-col-reverse xl:flex-row xl:items-start gap-8">
       <div className="flex-1 min-w-0 max-w-3xl space-y-6">
       <Card>
         <CardHeader>
@@ -459,7 +465,7 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
         </CardBody>
       </Card>
 
-      <div className="flex items-center gap-3 sticky bottom-4 bg-bg-2 border border-border rounded-lg shadow-sm px-5 py-3">
+      <div className="flex items-center gap-3 sticky bottom-4 bg-bg-2/92 backdrop-blur-xl border border-border-strong rounded-[12px] px-5 py-3">
         <Button type="submit" loading={saving}>Salvar alterações</Button>
         {saved && <span className="text-sm text-success">✓ Salvo</span>}
         {error && <span className="text-sm text-danger">{error}</span>}
@@ -470,7 +476,7 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
       <StoreExport tenantId={tenant.id} tenantName={tenant.name} slug={tenant.slug} />
       </div>
 
-      <aside className="shrink-0 self-center xl:self-start xl:sticky xl:top-6">
+      <aside className="shrink-0 self-center xl:self-start xl:sticky xl:top-[116px]">
         <PhonePreview tenantId={tenant.id} theme={previewTheme} />
       </aside>
       </div>

@@ -5,6 +5,7 @@ import { formatBRL } from '@/lib/utils';
 import { MigrationNotice } from '../migration-notice';
 import { TenantStatusBadge } from '../status-badge';
 import NewProviderForm from './new-provider-form';
+import { AdminScreen } from '@/components/admin/page-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,12 @@ export default async function ProvidersPage() {
   if (missingTable) return <MigrationNotice />;
 
   return (
-    <div className="p-8 space-y-6 max-w-5xl">
+    <AdminScreen
+      eyebrow="Plataforma"
+      title="Provedores"
+      description="Todos os provedores da plataforma, o plano de cada um e a situação da conta."
+      largura="max-w-5xl space-y-6"
+    >
       <div>
         <h1 className="text-2xl font-bold">Provedores</h1>
         <p className="text-sm text-fg-2 mt-1">Criar conta, definir mensalidade e controlar o acesso</p>
@@ -65,6 +71,6 @@ export default async function ProvidersPage() {
           {rows.length === 0 && <p className="text-sm text-fg-2">Nenhum provedor cadastrado ainda.</p>}
         </CardBody>
       </Card>
-    </div>
+    </AdminScreen>
   );
 }

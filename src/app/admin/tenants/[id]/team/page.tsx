@@ -3,6 +3,7 @@ import { asAdmins } from '@/lib/supabase/helpers';
 import { requireTenantAdmin } from '@/lib/auth/session';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { AdminScreen } from '@/components/admin/page-header';
 
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -17,12 +18,13 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const members = asAdmins(data);
 
   return (
-    <div className="p-8 max-w-3xl">
+    <AdminScreen
+      eyebrow="Conta"
+      title="Equipe & acessos"
+      description="Quem pode entrar neste painel e mexer na central do provedor."
+      largura="max-w-3xl"
+    >
       <Card>
-        <CardHeader>
-          <CardTitle>Equipe</CardTitle>
-          <CardSubtitle>Usuários com acesso ao painel deste provedor</CardSubtitle>
-        </CardHeader>
         <CardBody>
           <div className="space-y-2">
             {members.map((m) => (
@@ -42,6 +44,6 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           </p>
         </CardBody>
       </Card>
-    </div>
+    </AdminScreen>
   );
 }

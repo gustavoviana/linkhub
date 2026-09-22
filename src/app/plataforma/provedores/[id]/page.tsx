@@ -4,6 +4,7 @@ import { getProvider } from '@/lib/platform/data';
 import { platformTablesReady } from '@/lib/auth/platform';
 import { MigrationNotice } from '../../migration-notice';
 import ProviderDetail from './provider-detail';
+import { AdminScreen } from '@/components/admin/page-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,12 @@ export default async function ProviderPage({ params }: { params: Promise<{ id: s
   if (!data) notFound();
 
   return (
-    <div className="p-8 space-y-6 max-w-4xl">
+    <AdminScreen
+      eyebrow="Plataforma"
+      title="Provedor"
+      description="Cadastro, integração e acessos deste provedor."
+      largura="max-w-4xl space-y-6"
+    >
       <div>
         <Link href="/plataforma/provedores" className="text-xs text-fg-2 hover:text-brand">
           ← Provedores
@@ -30,6 +36,6 @@ export default async function ProviderPage({ params }: { params: Promise<{ id: s
       </div>
 
       <ProviderDetail data={data} />
-    </div>
+    </AdminScreen>
   );
 }

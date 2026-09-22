@@ -4,6 +4,7 @@ import { asTenantOrNull } from '@/lib/supabase/helpers';
 import { requireTenantAdmin } from '@/lib/auth/session';
 import { Icon, type IconName } from '@/components/portal/icons';
 import { CopyLink } from './copy-link';
+import { AdminScreen } from '@/components/admin/page-header';
 
 // Visão geral do provedor — portada de docs/prototipo/src/admin-dash.jsx:
 // alerta do que falta, checklist de configuração, link do portal, saúde da
@@ -103,7 +104,12 @@ export default async function TenantOverview({ params }: { params: Promise<{ id:
   ];
 
   return (
-    <div className="p-7 pb-24 max-w-[1180px]">
+    <AdminScreen
+      eyebrow="Visão geral"
+      title={tenant.name}
+      description="O que já está pronto e o que falta para a sua central receber clientes."
+      largura="pb-24 max-w-[1180px]"
+    >
       {blocking.length > 0 && (
         <div className="px-[18px] py-3.5 rounded-xl bg-warning/10 border border-warning/25 flex items-center gap-3.5 mb-5">
           <div className="w-[34px] h-[34px] rounded-[10px] bg-warning/20 text-warning flex items-center justify-center shrink-0">
@@ -308,7 +314,7 @@ export default async function TenantOverview({ params }: { params: Promise<{ id:
           small
         />
       </div>
-    </div>
+    </AdminScreen>
   );
 }
 

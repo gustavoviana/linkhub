@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge';
 import { formatBRL } from '@/lib/utils';
 import SyncPlansButton from './sync-button';
+import { AdminScreen } from '@/components/admin/page-header';
 
 export default async function PlansPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -19,17 +20,14 @@ export default async function PlansPage({ params }: { params: Promise<{ id: stri
   const plans = asPlans(data);
 
   return (
-    <div className="p-8 max-w-6xl space-y-4">
+    <AdminScreen
+      eyebrow="Operação"
+      title="Planos"
+      description={`${plans.length} planos vindos do seu ERP. Eles alimentam a velocidade e o valor que o assinante vê na central.`}
+      actions={<SyncPlansButton tenantId={id} />}
+      largura="max-w-6xl space-y-4"
+    >
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Planos</CardTitle>
-              <CardSubtitle>{plans.length ?? 0} planos sincronizados do ERP</CardSubtitle>
-            </div>
-            <SyncPlansButton tenantId={id} />
-          </div>
-        </CardHeader>
         {!plans.length ? (
           <div className="p-10 text-center text-fg-2">
             Nenhum plano sincronizado ainda. Clique em <strong>Sincronizar do ERP</strong>.
@@ -72,6 +70,6 @@ export default async function PlansPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
       </Card>
-    </div>
+    </AdminScreen>
   );
 }

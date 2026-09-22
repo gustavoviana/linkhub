@@ -8,6 +8,7 @@ import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/component
 import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/portal/icons';
 import { PasswordGenerator, forcaDaSenha } from '@/components/ui/password-generator';
+import { AdminScreen } from '@/components/admin/page-header';
 
 // Conta do super administrador: senha e segundo fator.
 
@@ -137,7 +138,12 @@ export default function AccountScreen({ email }: { email: string }) {
   const senhaFraca = nova.length > 0 && forca.bits < 50;
 
   return (
-    <div className="p-8 space-y-6 max-w-2xl">
+    <AdminScreen
+      eyebrow="Plataforma"
+      title="Minha conta"
+      description="Credenciais e segurança do seu acesso de super administrador."
+      largura="max-w-2xl space-y-6"
+    >
       <div>
         <h1 className="text-2xl font-bold">Minha conta</h1>
         <p className="text-sm text-fg-2 mt-1 font-mono">{email}</p>
@@ -310,7 +316,7 @@ export default function AccountScreen({ email }: { email: string }) {
           {okMfa && <div className="text-sm text-success bg-success/10 rounded-md p-3">{okMfa}</div>}
         </CardBody>
       </Card>
-    </div>
+    </AdminScreen>
   );
 }
 

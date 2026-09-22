@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatBRL } from '@/lib/utils';
 import { MigrationNotice } from './migration-notice';
 import { TenantStatusBadge } from './status-badge';
+import { AdminScreen } from '@/components/admin/page-header';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,12 @@ export default async function PlatformHome() {
   const atrasados = rows.filter((r) => r.overdue > 0);
 
   return (
-    <div className="p-8 space-y-6 max-w-6xl">
+    <AdminScreen
+      eyebrow="Plataforma"
+      title="Visão geral"
+      description="Como está a operação inteira: provedores ativos, assinantes atendidos e o que precisa de atenção."
+      largura="max-w-6xl space-y-6"
+    >
       <div>
         <h1 className="text-2xl font-bold">Visão geral da plataforma</h1>
         <p className="text-sm text-fg-2 mt-1">
@@ -126,7 +132,7 @@ export default async function PlatformHome() {
           </div>
         </CardBody>
       </Card>
-    </div>
+    </AdminScreen>
   );
 }
 

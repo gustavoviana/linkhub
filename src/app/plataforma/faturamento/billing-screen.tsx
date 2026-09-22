@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { formatBRL, formatDate, cn } from '@/lib/utils';
 import type { ChargeWithTenant, PlatformSummary } from '@/lib/platform/data';
 import type { ChargeStatus } from '@/lib/supabase/types';
+import { AdminScreen } from '@/components/admin/page-header';
 
 // Faturamento da plataforma: emitir o mês, acompanhar o que entrou e dar baixa.
 //
@@ -95,7 +96,12 @@ export default function BillingScreen({
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-5xl">
+    <AdminScreen
+      eyebrow="Plataforma"
+      title="Faturamento"
+      description="O que cada provedor paga e o que está em aberto."
+      largura="max-w-5xl space-y-6"
+    >
       <div>
         <h1 className="text-2xl font-bold">Faturamento</h1>
         <p className="text-sm text-fg-2 mt-1">Mensalidades que os provedores pagam à plataforma</p>
@@ -218,7 +224,7 @@ export default function BillingScreen({
           )}
         </CardBody>
       </Card>
-    </div>
+    </AdminScreen>
   );
 }
 

@@ -4,6 +4,7 @@ import { getUserTenants } from '@/lib/auth/session';
 import { getPlatformSession } from '@/lib/auth/platform';
 import { Card, CardBody } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { AdminScreen } from '@/components/admin/page-header';
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'linkhub.api.br';
 
@@ -16,13 +17,14 @@ export default async function AdminHome() {
     if (platform) redirect('/plataforma');
 
     return (
-      <div className="p-8 max-w-2xl">
-        <h1 className="text-2xl font-bold mb-1">Bem-vindo ao LinkHub</h1>
-        <p className="text-fg-2 mb-6 leading-relaxed">
-          Sua conta ainda não está vinculada a nenhum provedor. Fale com quem cuida da sua conta no
-          LinkHub para liberar o acesso.
-        </p>
-      </div>
+      <AdminScreen
+        eyebrow="Conta"
+        title="Bem-vindo ao LinkHub"
+        description="Sua conta ainda não está vinculada a nenhum provedor. Fale com quem cuida da sua conta no LinkHub para liberar o acesso."
+        largura="max-w-2xl"
+      >
+        <div />
+      </AdminScreen>
     );
   }
 
@@ -31,11 +33,12 @@ export default async function AdminHome() {
   }
 
   return (
-    <div className="p-8 max-w-5xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Meus provedores</h1>
-        <p className="text-sm text-fg-2 mt-1">Selecione um provedor para gerenciar</p>
-      </div>
+    <AdminScreen
+      eyebrow="Conta"
+      title="Meus provedores"
+      description="Escolha qual provedor você quer gerenciar agora."
+      largura="max-w-5xl"
+    >
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {tenants.map(({ tenant, admin }) => (
@@ -71,6 +74,6 @@ export default async function AdminHome() {
           </Card>
         ))}
       </div>
-    </div>
+    </AdminScreen>
   );
 }

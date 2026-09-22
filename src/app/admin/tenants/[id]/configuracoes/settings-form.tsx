@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Field } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { Icon } from '@/components/portal/icons';
+import { AdminScreen } from '@/components/admin/page-header';
 
 export default function SettingsForm({ tenant }: { tenant: Tenant }) {
   const router = useRouter();
@@ -39,7 +40,12 @@ export default function SettingsForm({ tenant }: { tenant: Tenant }) {
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-3xl">
+    <AdminScreen
+      eyebrow="Conta"
+      title="Configurações"
+      description="Entrada na central, canais de atendimento e os dados da empresa que aparecem nos documentos."
+      largura="max-w-3xl space-y-6"
+    >
       <Card>
         <CardHeader>
           <CardTitle>Como o cliente entra na central</CardTitle>
@@ -100,11 +106,11 @@ export default function SettingsForm({ tenant }: { tenant: Tenant }) {
         </CardBody>
       </Card>
 
-      <div className="flex items-center gap-3 sticky bottom-4 bg-bg-2 border border-border rounded-lg shadow-sm px-5 py-3">
+      <div className="flex items-center gap-3 sticky bottom-4 bg-bg-2/92 backdrop-blur-xl border border-border-strong rounded-[12px] px-5 py-3">
         <Button type="button" onClick={save} loading={saving}>Salvar configurações</Button>
         {saved && <span className="text-sm text-success">✓ Salvo</span>}
       </div>
-    </div>
+    </AdminScreen>
   );
 }
 

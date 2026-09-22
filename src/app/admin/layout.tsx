@@ -2,11 +2,12 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { getUser, getUserTenants } from '@/lib/auth/session';
 import { getPlatformSession } from '@/lib/auth/platform';
-import { Icon, type IconName } from '@/components/portal/icons';
+import { Icon } from '@/components/portal/icons';
+import { LogoMark } from '@/components/site/chrome';
+import { NavGroup, NavItem } from '@/components/admin/nav';
 
-// Barra lateral do painel — portada de docs/prototipo/src/admin-dash.jsx:
-// marca, seletor de provedor, navegação em três blocos (configuração,
-// operação, conta) e o rodapé com o usuário.
+// Barra lateral do painel: marca, seletor de provedor, navegação em três
+// blocos (configuração, operação, conta) e o rodapé com o usuário.
 //
 // Este painel é do cliente e cuida de UM provedor. Gestão de provedores,
 // cobrança e senha de terceiros moram em /plataforma, e o atalho para lá só
@@ -21,22 +22,23 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-screen bg-bg flex">
-      <aside className="w-[232px] bg-bg-2 border-r border-border flex flex-col shrink-0">
-        <div className="px-4 py-[18px] border-b border-border flex items-center gap-2.5">
-          <div className="w-[30px] h-[30px] rounded-[9px] bg-brand text-brand-fg flex items-center justify-center font-extrabold text-sm">
-            L
-          </div>
-          <span className="text-[14.5px] font-semibold tracking-[-0.01em]">LinkHub Admin</span>
+      <aside className="w-[248px] bg-bg-2 border-r border-border flex flex-col shrink-0 sticky top-0 h-screen">
+        <div className="px-4 h-[60px] flex items-center gap-2.5 border-b border-border">
+          <LogoMark size={28} />
+          <span className="text-[14px] font-extrabold tracking-[-0.02em]">LinkHub</span>
+          <span className="text-[9.5px] font-bold tracking-[0.12em] uppercase text-fg-3 border border-border rounded px-1.5 py-0.5 ml-auto">
+            Painel
+          </span>
         </div>
 
         {current && (
-          <div className="px-3 pt-3 pb-2">
+          <div className="px-3 pt-3">
             <Link
               href="/admin"
-              className="px-[11px] py-[9px] rounded-[9px] bg-bg-3 border border-border flex items-center gap-2.5 hover:border-fg-3 transition-colors"
+              className="px-3 py-2.5 rounded-[11px] bg-bg-3 border border-border flex items-center gap-2.5 hover:border-border-strong transition-colors"
             >
-              <div
-                className="w-6 h-6 rounded-[7px] text-white flex items-center justify-center text-[11px] font-extrabold shrink-0 overflow-hidden"
+              <span
+                className="w-7 h-7 rounded-[8px] text-white flex items-center justify-center text-[11px] font-extrabold shrink-0 overflow-hidden"
                 style={{ background: current.primary_color }}
               >
                 {current.logo_url ? (
@@ -45,27 +47,41 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                 ) : (
                   current.name[0]
                 )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[12.5px] font-semibold truncate">{current.name}</div>
-                <div className="text-[10.5px] text-fg-3">
-                  {current.status}
-                  {tenants.length > 1 && ` · ${tenants.length} provedores`}
-                </div>
-              </div>
-              <Icon name="chevron" size={13} style={{ transform: 'rotate(90deg)' }} />
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[12.5px] font-bold truncate leading-tight">
+                  {current.name}
+                </span>
+                <span className="flex items-center gap-1.5 mt-1">
+                  <span
+                    className={[
+                      'w-1.5 h-1.5 rounded-full',
+                      current.status === 'active' ? 'bg-success' : 'bg-warning',
+                    ].join(' ')}
+                  />
+                  <span className="text-[10.5px] text-fg-3">
+                    {current.status}
+                    {tenants.length > 1 && ` · ${tenants.length} provedores`}
+                  </span>
+                </span>
+              </span>
+              <Icon name="chevron" size={13} className="text-fg-3" style={{ transform: 'rotate(90deg)' }} />
             </Link>
           </div>
         )}
 
-        <nav className="px-3 flex-1 overflow-y-auto flex flex-col gap-0.5">
-          <NavItem href="/admin" icon="home">Visão geral</NavItem>
+        <nav className="px-3 flex-1 overflow-y-auto flex flex-col gap-0.5 pb-4 scrollbar-hide">
+          <div className="pt-3" />
+          <NavItem href="/admin" icon="home" exact>
+            Visão geral
+          </NavItem>
 
           {current && (
             <>
               <NavGroup>Configuração</NavGroup>
               <NavItem href={`/admin/tenants/${current.id}/erp`} icon="router">Integração ERP</NavItem>
               <NavItem href={`/admin/tenants/${current.id}/branding`} icon="flash">Marca &amp; visual</NavItem>
+              <NavItem href={`/admin/tenants/${current.id}/aplicativo`} icon="phone">Aplicativo</NavItem>
               <NavItem href={`/admin/tenants/${current.id}/dominio`} icon="globe">Domínio</NavItem>
 
               <NavGroup>Operação</NavGroup>
@@ -79,10 +95,10 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           )}
 
           {platform && (
-            <div className="mt-auto pt-4">
+            <div className="mt-auto pt-6">
               <Link
                 href="/plataforma"
-                className="flex items-center gap-2.5 px-[11px] py-2 rounded-lg text-[12.5px] font-medium text-fg-2 border border-dashed border-border hover:border-brand hover:text-brand transition-colors"
+                className="flex items-center gap-2.5 px-3 h-9 rounded-[9px] text-[12.5px] font-semibold text-fg-2 border border-dashed border-border-strong hover:border-brand hover:text-brand transition-colors"
               >
                 <Icon name="shield" size={15} />
                 <span className="flex-1">Painel da plataforma</span>
@@ -91,18 +107,17 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           )}
         </nav>
 
-        <div className="px-4 py-3 border-t border-border flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-brand/15 text-brand flex items-center justify-center text-[11px] font-bold shrink-0">
+        <div className="px-3 py-3 border-t border-border flex items-center gap-2.5">
+          <span className="w-7 h-7 rounded-full bg-brand/12 text-brand flex items-center justify-center text-[11px] font-extrabold shrink-0">
             {user.email?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[11px] text-fg-2 truncate">{user.email}</div>
-          </div>
+          </span>
+          <span className="flex-1 min-w-0 text-[11.5px] text-fg-2 truncate">{user.email}</span>
           <form action="/auth/logout" method="post">
             <button
               type="submit"
-              title="Sair"
-              className="text-fg-3 hover:text-danger p-1 flex transition-colors"
+              title="Sair da conta"
+              aria-label="Sair da conta"
+              className="text-fg-3 hover:text-danger p-1.5 flex rounded-lg hover:bg-bg-3 transition-colors"
             >
               <Icon name="logout" size={15} />
             </button>
@@ -110,27 +125,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto min-w-0">{children}</main>
+      <main className="flex-1 min-w-0">{children}</main>
     </div>
-  );
-}
-
-function NavGroup({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="text-[10.5px] font-bold tracking-[0.08em] uppercase text-fg-3 px-[11px] pt-3.5 pb-1">
-      {children}
-    </div>
-  );
-}
-
-function NavItem({ href, icon, children }: { href: string; icon: IconName; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-2.5 px-[11px] py-2 rounded-lg text-[13.5px] font-medium text-fg-2 hover:bg-bg-3 hover:text-fg transition-colors"
-    >
-      <Icon name={icon} size={16} />
-      <span className="flex-1">{children}</span>
-    </Link>
   );
 }

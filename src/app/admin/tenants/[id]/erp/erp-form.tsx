@@ -12,6 +12,7 @@ import type { MaskedErpConfig } from '@/lib/erp/crypto';
 import { mensagemDeLiberacao } from '@/lib/erp/liberacao-de-ip';
 import { instrucoesDoErp } from '@/lib/erp/instrucoes';
 import { cn } from '@/lib/utils';
+import { AdminScreen } from '@/components/admin/page-header';
 
 const ERPS: { id: ErpType; name: string; desc: string }[] = [
   { id: 'ixc', name: 'IXC Soft', desc: 'Auth via Base64(usuário:apiKey)' },
@@ -273,7 +274,12 @@ export default function ErpForm({
           : null;
 
   return (
-    <div className="p-8 max-w-4xl space-y-6">
+    <AdminScreen
+      eyebrow="Configuração"
+      title="Integração com o ERP"
+      description="De onde vêm as faturas, os contratos e o consumo que o assinante vê. Cole a chave da API e a sincronização passa a rodar sozinha."
+      largura="max-w-4xl space-y-6"
+    >
       {diagnostico && (
         <div
           className={cn(
@@ -733,11 +739,11 @@ export default function ErpForm({
         </div>
       )}
 
-      <div className="flex gap-3 items-center sticky bottom-0 bg-bg-2 border-t border-border -mx-8 px-8 py-3">
+      <div className="flex gap-3 items-center sticky bottom-0 bg-bg-2/92 backdrop-blur-xl border-t border-border -mx-6 lg:-mx-8 px-6 lg:px-8 py-3.5">
         <Button onClick={save} loading={saving}>Salvar integração</Button>
         {saved && <span className="text-sm text-success">✓ Salvo</span>}
         {error && <span className="text-sm text-danger">{error}</span>}
       </div>
-    </div>
+    </AdminScreen>
   );
 }

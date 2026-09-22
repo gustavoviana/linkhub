@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card'
 import { maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { ResetPasswordButton } from './reset-password-button';
+import { AdminScreen } from '@/components/admin/page-header';
 
 export default async function CustomersPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,16 +21,13 @@ export default async function CustomersPage({ params }: { params: Promise<{ id: 
   const customers = asCustomers(data);
 
   return (
-    <div className="p-8 space-y-4 max-w-7xl">
+    <AdminScreen
+      eyebrow="Operação"
+      title="Clientes"
+      description={`${count ?? 0} assinantes sincronizados do seu ERP. A lista mostra os 50 mais recentes.`}
+      largura="space-y-4 max-w-7xl"
+    >
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Clientes</CardTitle>
-              <CardSubtitle>{count ?? 0} clientes cadastrados</CardSubtitle>
-            </div>
-          </div>
-        </CardHeader>
         {!customers.length ? (
           <div className="p-10 text-center text-fg-2">
             <p className="mb-2">Ainda não há clientes sincronizados.</p>
@@ -84,6 +82,6 @@ export default async function CustomersPage({ params }: { params: Promise<{ id: 
           </div>
         )}
       </Card>
-    </div>
+    </AdminScreen>
   );
 }

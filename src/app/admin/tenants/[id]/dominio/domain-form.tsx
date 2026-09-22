@@ -8,6 +8,7 @@ import { Input, Field } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/portal/icons';
+import { AdminScreen } from '@/components/admin/page-header';
 
 // Tela de domínio, em três passos declarados: registrar o domínio, apontar o
 // DNS e emitir o certificado.
@@ -115,7 +116,12 @@ export default function DomainForm({ tenant, rootDomain }: { tenant: Tenant; roo
   }
 
   return (
-    <div className="p-8 space-y-6 max-w-3xl">
+    <AdminScreen
+      eyebrow="Configuração"
+      title="Domínio da central"
+      description="O endereço que você entrega aos seus clientes. Pode ser o subdomínio que já vem pronto ou um domínio seu."
+      largura="max-w-3xl space-y-6"
+    >
       <Card>
         <CardHeader>
           <CardTitle>Endereço da sua central</CardTitle>
@@ -202,7 +208,7 @@ export default function DomainForm({ tenant, rootDomain }: { tenant: Tenant; roo
           </div>
         </CardBody>
       </Card>
-    </div>
+    </AdminScreen>
   );
 }
 
