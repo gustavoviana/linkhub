@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Field } from '@/components/ui/input';
 import { Card, CardBody } from '@/components/ui/card';
 import { slugify } from '@/lib/utils';
+import { LogoMark } from '@/components/site/chrome';
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'linkhub.api.br';
 
@@ -135,7 +136,7 @@ export default function SignupPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 rounded-md bg-brand text-brand-fg flex items-center justify-center font-bold text-sm">L</div>
+            <LogoMark size={32} />
             <span className="font-semibold">LinkHub</span>
           </Link>
           <h1 className="text-2xl font-bold">

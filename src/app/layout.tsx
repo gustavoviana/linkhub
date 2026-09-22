@@ -27,6 +27,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Marca que ha JavaScript, antes da primeira pintura. E o que autoriza
+            o CSS a esconder as secoes que entram com scroll — ver .lh-reveal
+            em globals.css. */}
+        <script dangerouslySetInnerHTML={{ __html: "document.documentElement.dataset.js='on'" }} />
+      </head>
       <body>{children}</body>
     </html>
   );

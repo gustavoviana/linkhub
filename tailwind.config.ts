@@ -25,7 +25,10 @@ const config: Config = {
           2: 'rgb(var(--fg-2) / <alpha-value>)',
           3: 'rgb(var(--fg-3) / <alpha-value>)',
         },
-        border: 'rgb(var(--border) / <alpha-value>)',
+        border: {
+          DEFAULT: 'rgb(var(--border) / <alpha-value>)',
+          strong: 'rgb(var(--border-strong) / <alpha-value>)',
+        },
         success: 'rgb(var(--success) / <alpha-value>)',
         warning: 'rgb(var(--warning) / <alpha-value>)',
         danger: 'rgb(var(--danger) / <alpha-value>)',
@@ -34,6 +37,9 @@ const config: Config = {
       fontFamily: {
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+      },
+      maxWidth: {
+        container: 'var(--container)',
       },
       borderRadius: {
         sm: '4px',

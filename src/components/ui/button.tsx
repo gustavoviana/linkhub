@@ -12,18 +12,21 @@ interface Props extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 export const Button = React.forwardRef<HTMLButtonElement, Props>(
   ({ variant = 'primary', size = 'md', className, loading, disabled, children, ...rest }, ref) => {
-    const base = 'inline-flex items-center justify-center gap-2 font-medium transition-all duration-150 rounded-md disabled:opacity-50 disabled:cursor-not-allowed select-none';
+    const base =
+      'inline-flex items-center justify-center gap-2 font-bold tracking-[-0.01em] rounded-[10px] select-none ' +
+      'transition-[background-color,border-color,color,transform] duration-150 ease-out active:scale-[0.98] ' +
+      'disabled:opacity-55 disabled:cursor-not-allowed disabled:active:scale-100';
     const sizes: Record<Size, string> = {
       sm: 'h-8 px-3 text-xs',
-      md: 'h-10 px-4 text-sm',
-      lg: 'h-12 px-6 text-base',
+      md: 'h-10 px-4 text-[13px]',
+      lg: 'h-12 px-6 text-sm',
     };
     const variants: Record<Variant, string> = {
-      primary: 'bg-brand text-brand-fg hover:bg-brand/90 shadow-sm',
-      secondary: 'bg-bg-3 text-fg hover:bg-bg-3/70',
-      ghost: 'text-fg hover:bg-bg-3',
-      danger: 'bg-danger text-white hover:bg-danger/90',
-      outline: 'border border-border bg-bg-2 text-fg hover:bg-bg-3',
+      primary: 'bg-brand text-brand-fg hover:bg-brand/85',
+      secondary: 'bg-bg-3 text-fg border border-border hover:border-border-strong',
+      ghost: 'text-fg-2 hover:text-fg hover:bg-bg-3',
+      danger: 'bg-danger/12 text-danger border border-danger/30 hover:bg-danger/20',
+      outline: 'border border-border-strong bg-transparent text-fg hover:bg-bg-3 hover:border-fg-3',
     };
     return (
       <button

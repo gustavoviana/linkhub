@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input, Field } from '@/components/ui/input';
 import { Card, CardBody } from '@/components/ui/card';
+import { LogoMark } from '@/components/site/chrome';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -40,7 +41,7 @@ export default function ForgotPasswordPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 rounded-md bg-brand text-brand-fg flex items-center justify-center font-bold text-sm">L</div>
+            <LogoMark size={32} />
             <span className="font-semibold">LinkHub</span>
           </Link>
           <h1 className="text-2xl font-bold">Recuperar acesso</h1>

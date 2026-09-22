@@ -2,23 +2,70 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+   Tokens da casca do LinkHub — landing, login, painel do provedor e plataforma.
+   Mood: dark premium, um acento só. Profundidade vem de borda e luz, não de
+   sombra: sombra sobre fundo quase preto não aparece, só suja.
+
+   A central do assinante NÃO lê estes valores. Ela reescreve :root com a marca
+   do provedor (tenantCssText, em components/portal/theme.tsx), então mexer
+   aqui nunca chega na tela que o cliente final abre.
+
+   Cor em tripla "r g b" porque o Tailwind monta rgb(var(--x) / <alpha-value>).
+--------------------------------------------------------------------------- */
+
 :root {
-  --brand: 109 74 224;
-  --brand-fg: 255 255 255;
-  --brand-soft: 109 74 224;
-  --accent: 10 165 192;
-  --accent-fg: 255 255 255;
-  --bg: 250 251 253;
-  --bg-2: 255 255 255;
-  --bg-3: 243 244 248;
-  --fg: 13 15 23;
-  --fg-2: 82 88 102;
-  --fg-3: 138 144 160;
-  --border: 231 232 238;
-  --success: 21 145 90;
-  --warning: 184 115 14;
-  --danger: 214 51 74;
-  --info: 38 96 212;
+  color-scheme: dark;
+
+  /* Acento único. #4D93FF é o mesmo valor nos dois papéis: como texto sobre o
+     fundo dá 6,72:1, e como fundo de botão com tinta quase preta dá os mesmos
+     6,72:1 — os dois passam em AA sem precisar de um segundo tom. Azul claro
+     com texto branco reprovaria (3,9:1). */
+  --brand: 77 147 255;
+  --brand-fg: 5 5 7;
+  --brand-soft: 77 147 255;
+
+  /* O segundo tom existe só para a luz do hero e para gráfico. Nunca para CTA:
+     dois acentos competindo é o erro que a referência proíbe. */
+  --accent: 34 211 238;
+  --accent-fg: 5 5 7;
+
+  /* Neutros: quase preto, nunca cinza chumbo. */
+  --bg: 5 5 7;
+  --bg-2: 12 12 16;
+  --bg-3: 20 20 26;
+  --fg: 245 245 247;
+  --fg-2: 163 163 174;
+  --fg-3: 124 124 136;
+  --border: 30 30 38;
+  --border-strong: 46 46 56;
+
+  /* Semânticas — escolhidas para o fundo escuro, todas acima de 7:1. */
+  --success: 52 211 153;
+  --warning: 251 191 36;
+  --danger: 255 107 107;
+  --info: 56 189 248;
+
+  /* Tipografia. Plus Jakarta Sans é a família única, tratada: display em 800
+     com tracking negativo, eyebrow em 700 com tracking aberto. Fonte sem
+     tratamento é o que faz interface parecer template. */
+  --tracking-display: -0.035em;
+  --tracking-tight: -0.02em;
+  --tracking-wide: 0.12em;
+  --leading-display: 1.04;
+
+  /* Ritmo vertical: seções respiram. */
+  --section-y: clamp(4.5rem, 9vw, 8rem);
+  --container: 1200px;
+  --gutter: clamp(1.25rem, 4vw, 2rem);
+
+  --radius-pill: 999px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 600ms;
 }
 
 * {
@@ -37,8 +84,8 @@ body {
 }
 
 ::selection {
-  background: rgb(var(--brand) / 0.2);
-  color: rgb(var(--brand));
+  background: rgb(var(--brand) / 0.25);
+  color: rgb(var(--fg));
 }
 
 input,
@@ -46,6 +93,14 @@ select,
 textarea,
 button {
   font-family: inherit;
+}
+
+/* Foco visível em tudo que recebe teclado. Sem isto o fundo escuro engole o
+   anel padrão do navegador e navegar por Tab vira adivinhação. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--brand));
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .font-mono {
@@ -59,6 +114,258 @@ button {
 }
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
+}
+
+/* ------------------------------------------------------------------ camadas */
+
+/* Luz cênica do fundo. Um ou dois por viewport, atrás do conteúdo, sem captar
+   ponteiro. É o que dá profundidade no escuro — não é vidro em card. */
+.lh-glow {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(100px);
+  opacity: 0.18;
+  z-index: 0;
+}
+
+/* Malha de fundo: grade técnica bem apagada, referência de painel de rede.
+   Some no mobile, onde só somaria peso. */
+.lh-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(var(--fg) / 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--fg) / 0.028) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 20%, transparent 75%);
+}
+
+@media (max-width: 767px) {
+  .lh-grid {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------------------- tipografia */
+
+.lh-display {
+  font-weight: 800;
+  letter-spacing: var(--tracking-display);
+  line-height: var(--leading-display);
+  text-wrap: balance;
+}
+
+.lh-lead {
+  color: rgb(var(--fg-2));
+  line-height: 1.6;
+  max-width: 58ch;
+  text-wrap: pretty;
+}
+
+/* Eyebrow: rótulo curto antes de todo headline de seção. */
+.lh-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: rgb(var(--brand));
+}
+
+.lh-eyebrow--pill {
+  padding: 0.3rem 0.7rem 0.3rem 0.55rem;
+  background: rgb(var(--brand) / 0.1);
+  border: 1px solid rgb(var(--brand) / 0.22);
+  border-radius: var(--radius-pill);
+}
+
+/* ---------------------------------------------------------------- controles */
+
+.lh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 48px;
+  padding-inline: 1.5rem;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.lh-btn:active {
+  transform: scale(0.98);
+}
+.lh-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.lh-btn--primary {
+  background: rgb(var(--brand));
+  color: rgb(var(--brand-fg));
+  border: 1px solid transparent;
+}
+.lh-btn--primary:hover:not(:disabled) {
+  background: rgb(var(--brand) / 0.86);
+}
+
+.lh-btn--ghost {
+  background: transparent;
+  color: rgb(var(--fg));
+  border: 1px solid rgb(var(--border-strong));
+}
+.lh-btn--ghost:hover:not(:disabled) {
+  background: rgb(var(--bg-3));
+  border-color: rgb(var(--fg-3));
+}
+
+/* A seta desliza no hover — assinatura de CTA da referência. */
+.lh-arrow {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.lh-btn:hover .lh-arrow {
+  transform: translateX(3px);
+}
+
+.lh-input {
+  width: 100%;
+  height: 46px;
+  padding-inline: 0.875rem;
+  background: rgb(var(--bg));
+  border: 1px solid rgb(var(--border-strong));
+  border-radius: 10px;
+  color: rgb(var(--fg));
+  font-size: 14px;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.lh-input::placeholder {
+  color: rgb(var(--fg-3));
+}
+.lh-input:focus {
+  outline: none;
+  border-color: rgb(var(--brand));
+  box-shadow: 0 0 0 3px rgb(var(--brand) / 0.16);
+}
+.lh-input[aria-invalid='true'] {
+  border-color: rgb(var(--danger));
+}
+
+/* ------------------------------------------------------------------- cards */
+
+.lh-card {
+  background: rgb(var(--bg-2));
+  border: 1px solid rgb(var(--border));
+  border-radius: 16px;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out);
+}
+.lh-card--hover:hover {
+  border-color: rgb(var(--border-strong));
+  transform: translateY(-2px);
+}
+
+/* ------------------------------------------------------------------ motion */
+
+/* O conteudo nasce visivel. Quem esconde e o seletor abaixo, que so casa
+   depois que o script marcou <html data-js="on"> — assim, se o JavaScript
+   nao rodar, a pagina aparece inteira em vez de ficar em branco. */
+html[data-js='on'] .lh-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out);
+}
+html[data-js='on'] .lh-reveal[data-visible='true'] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.lh-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--bg-2)) 25%,
+    rgb(var(--bg-3)) 50%,
+    rgb(var(--bg-2)) 75%
+  );
+  background-size: 200% 100%;
+  animation: lh-shimmer 1.4s ease infinite;
+  border-radius: 6px;
+}
+@keyframes lh-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.lh-marquee {
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.lh-marquee-track {
+  display: flex;
+  gap: 0.75rem;
+  width: max-content;
+  animation: lh-marquee 34s linear infinite;
+}
+.lh-marquee:hover .lh-marquee-track {
+  animation-play-state: paused;
+}
+@keyframes lh-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* Accordion do FAQ: anima grid-template-rows, que não provoca reflow como
+   animar height provocaria. */
+.lh-faq-answer {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-base) var(--ease-in-out);
+}
+.lh-faq[data-open='true'] .lh-faq-answer {
+  grid-template-rows: 1fr;
+}
+.lh-faq-answer > div {
+  overflow: hidden;
+}
+.lh-faq-chevron {
+  transition: transform var(--dur-base) var(--ease-in-out);
+}
+.lh-faq[data-open='true'] .lh-faq-chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  html[data-js='on'] .lh-reveal {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* Barra de navegação da central. O vidro é aplicado inline (as cores mudam
