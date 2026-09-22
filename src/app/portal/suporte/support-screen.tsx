@@ -7,6 +7,7 @@ import { formatDate } from '@/lib/utils';
 import { Icon, type IconName } from '@/components/portal/icons';
 import { portalTokens, rgba, type PortalTokens } from '@/components/portal/tokens';
 import { usePortalTokens } from '@/components/portal/theme';
+import { usePortalRuntime } from '@/components/portal/runtime';
 import { ScreenHeader } from '@/components/portal/shell';
 
 // Os assuntos comuns abrem a orientação aqui dentro antes de mandar o cliente
@@ -372,14 +373,48 @@ function TicketSection({
   tickets: SupportTicket[];
 }) {
   const router = useRouter();
+  const { demo } = usePortalRuntime();
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [protocol, setProtocol] = useState<string | null>(null);
+  // Na demonstração o chamado não sai daqui: nasce nesta lista e some quando
+  // o visitante fecha a aba. Gravar de verdade encheria a tabela de chamados
+  // de teste, e mandar o formulário para /api/portal/tickets devolveria 401.
+  const [abertosNaDemo, setAbertosNaDemo] = useState<SupportTicket[]>([]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (demo) {
+      const agora = new Date();
+      const numero = `${agora.getFullYear()}${String(Math.floor(agora.getTime() / 1000) % 10000).padStart(4, '0')}`;
+      setAbertosNaDemo((antes) => [
+        {
+          id: `demo-novo-${agora.getTime()}`,
+          tenant_id: tenant.id,
+          customer_id: null,
+          contract_id: null,
+          external_id: null,
+          protocol: numero,
+          subject,
+          category: 'portal',
+          status: 'open',
+          priority: 'normal',
+          channel: 'app',
+          opened_at: agora.toISOString(),
+          closed_at: null,
+          created_at: agora.toISOString(),
+        },
+        ...antes,
+      ]);
+      setProtocol(numero);
+      setSubject('');
+      setOpen(false);
+      return;
+    }
+
     setSending(true);
     setError(null);
     const r = await fetch('/api/portal/tickets', {
@@ -396,6 +431,10 @@ function TicketSection({
     setOpen(false);
     router.refresh();
   }
+
+  // No portal de verdade a lista é a que veio do servidor; o chamado recém
+  // aberto entra nela pelo router.refresh() logo acima.
+  const lista = abertosNaDemo.length ? [...abertosNaDemo, ...tickets] : tickets;
 
   return (
     <section style={{ padding: '0 20px', marginBottom: 20 }}>
@@ -497,12 +536,12 @@ function TicketSection({
         </form>
       )}
 
-      {tickets.length === 0 && !open && (
+      {lista.length === 0 && !open && (
         <div style={{ fontSize: 13, color: t.text2 }}>Você ainda não abriu nenhum chamado.</div>
       )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {tickets.map((ticket) => {
+        {lista.map((ticket) => {
           const closed = ticket.status === 'closed' || ticket.status === 'resolved';
           return (
             <div

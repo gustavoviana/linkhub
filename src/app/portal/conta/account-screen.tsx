@@ -1,11 +1,12 @@
 'use client';
 
-import Link from 'next/link';
+import { NavLink as Link } from '@/components/portal/nav-link';
 import type { Tenant, Customer, Contract, Plan } from '@/lib/supabase/types';
 import { contractStatusLabel, formatBRL, maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
 import { Icon } from '@/components/portal/icons';
 import { portalTokens, type PortalTokens } from '@/components/portal/tokens';
 import { usePortalTokens } from '@/components/portal/theme';
+import { usePortalRuntime } from '@/components/portal/runtime';
 import { ScreenHeader } from '@/components/portal/shell';
 import { initials } from '@/components/portal/ui';
 
@@ -24,6 +25,7 @@ export function AccountScreen({
   mensalidadeCents?: number | null;
 }) {
   const t = usePortalTokens(tenant);
+  const { logoutAction } = usePortalRuntime();
 
   const address = [
     customer.address_street && `${customer.address_street}, ${customer.address_number ?? 's/n'}`,
@@ -123,7 +125,7 @@ export function AccountScreen({
           <Icon name="help" size={16} /> Falar com o suporte
         </Link>
         {/* Sair é POST — ver o comentário no shell do portal. */}
-        <form action="/auth/logout" method="post">
+        <form action={logoutAction} method="post">
           <button
             type="submit"
             style={{

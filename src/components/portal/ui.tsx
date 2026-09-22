@@ -1,7 +1,7 @@
 'use client';
 
 import { NavLink as Link } from './nav-link';
-import { usePathname } from 'next/navigation';
+import { usePortalPath } from './runtime';
 import type { Tenant, Customer, Contract, Plan, Invoice } from '@/lib/supabase/types';
 import type { ErpConnection, ErpUsagePoint } from '@/lib/erp/types';
 import { Icon, type IconName } from './icons';
@@ -183,7 +183,7 @@ function glassBar(t: PortalTokens) {
 export function TabBar({ t, path }: { t: PortalTokens; path?: string }) {
   // `path` é para as telas montadas fora do roteador — mockup e screenshots
   // das lojas —, onde a URL real não diz em que aba o assinante está.
-  const pathname = usePathname();
+  const pathname = usePortalPath();
   const current = path ?? pathname;
 
   if (t.layout === 'v2') {

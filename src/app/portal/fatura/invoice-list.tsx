@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { NavLink as Link } from '@/components/portal/nav-link';
 import type { Tenant, Invoice } from '@/lib/supabase/types';
 import { formatBRL, formatDate, formatMonthYear } from '@/lib/utils';
 import { Icon } from '@/components/portal/icons';

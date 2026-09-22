@@ -75,7 +75,10 @@ export function buildPreviewData(tenant: Tenant): PreviewData {
     cpf_cnpj: '12345678909',
     name: 'Marina Duarte',
     email: 'marina@exemplo.com.br',
-    phone: '5554998800000',
+    // Sem o código do país: maskPhone só formata 10 ou 11 dígitos, e com o 55
+    // na frente a tela de dados saía com "5554998800000" cru — numa imagem
+    // que o provedor publica na Play Store.
+    phone: '54998800000',
     whatsapp: '5554998800000',
     address_street: 'Rua das Acácias',
     address_number: '1234',

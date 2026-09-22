@@ -16,6 +16,10 @@ import type { Tenant } from '@/lib/supabase/types';
 const SLUGS_RESERVADOS = new Set([
   'www', 'admin', 'app', 'portal', 'api', 'auth', 'login', 'signup',
   'dashboard', 'assets', 'static', 'plataforma', 'super',
+  // 'demo' é o endereço da central de demonstração: o middleware atende esse
+  // subdomínio antes de procurar provedor, então quem ficasse com ele teria a
+  // central inacessível pelo próprio endereço.
+  'demo',
 ]);
 
 const BODY = z.object({

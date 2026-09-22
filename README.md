@@ -145,7 +145,7 @@ No Vercel → **Settings → Domains** do projeto:
 
 - `https://linkhub.api.br` → landing
 - `https://linkhub.api.br/signup` → criar conta
-- `https://demo.linkhub.api.br` → portal do tenant seed
+- `https://demo.linkhub.api.br` → central de demonstração (dados fictícios, sem banco)
 
 ## Estrutura
 

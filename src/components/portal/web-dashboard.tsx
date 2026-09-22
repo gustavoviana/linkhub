@@ -196,8 +196,14 @@ export function WebDashboard(props: PortalScreenProps) {
 
           <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${t.border}` }}>
             {/* A lista começa pelas que vencem em seguida — chamar de
-                histórico contradizia as quatro linhas "Em aberto" logo abaixo. */}
-            <div style={{ fontSize: 11, color: t.text2, fontWeight: 600, marginBottom: 8 }}>Próximas faturas</div>
+                histórico contradizia as quatro linhas "Em aberto" logo abaixo.
+                Mas quando não há mais nada em aberto ela vira o histórico de
+                pagamentos, e aí "Próximas faturas" era um título em cima de
+                quatro linhas com o selo "Paga" ao lado. O mesmo teste dos três
+                layouts do celular decide o título aqui. */}
+            <div style={{ fontSize: 11, color: t.text2, fontWeight: 600, marginBottom: 8 }}>
+              {recentInvoices.every((i) => i.status !== 'paid') ? 'Próximas faturas' : 'Últimas faturas'}
+            </div>
             {recentInvoices.length === 0 && (
               <div style={{ fontSize: 12, color: t.text3 }}>Nenhuma fatura ainda.</div>
             )}

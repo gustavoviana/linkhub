@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Sua Logo">
+  <!-- Ícone da aba da demonstração: só a marca, quadrada. -->
+  <rect width="64" height="64" rx="15" fill="#5b5bd6"/>
+  <g fill="none" stroke="#ffffff" stroke-width="4.4" stroke-linecap="round">
+    <path d="M18 30.5a20 20 0 0 1 28 0"/>
+    <path d="M25 38.5a11 11 0 0 1 14 0"/>
+  </g>
+  <circle cx="32" cy="47" r="4" fill="#ffffff"/>
+</svg>

@@ -4,8 +4,8 @@
 // A lateral vem de docs/prototipo/src/web.jsx; a inferior, dos três layouts
 // mobile do protótipo.
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { NavLink as Link } from './nav-link';
+import { usePortalPath, usePortalRuntime } from './runtime';
 import type { Tenant, Customer } from '@/lib/supabase/types';
 import { maskCpfCnpj, titleCaseName } from '@/lib/utils';
 import { Icon, type IconName } from './icons';
@@ -29,7 +29,8 @@ export function PortalSidebar({
   customer: Customer;
   t: PortalTokens;
 }) {
-  const pathname = usePathname();
+  const pathname = usePortalPath();
+  const { logoutAction } = usePortalRuntime();
 
   return (
     <aside
@@ -120,7 +121,7 @@ export function PortalSidebar({
         </div>
         {/* Form, não link: sair é POST. Como <a>, o clique virava GET e o
             assinante levava um 405 na cara em vez de sair da conta. */}
-        <form action="/auth/logout" method="post">
+        <form action={logoutAction} method="post">
           <button
             type="submit"
             style={{

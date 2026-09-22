@@ -479,7 +479,7 @@ begin
   end if;
 
   p_slug := lower(trim(p_slug));
-  if p_slug = any(array['www','admin','app','portal','api','auth','login','signup','dashboard','assets','static']) then
+  if p_slug = any(array['www','admin','app','portal','api','auth','login','signup','dashboard','assets','static','demo']) then
     raise exception 'slug % is reserved', p_slug using errcode = '22023';
   end if;
 

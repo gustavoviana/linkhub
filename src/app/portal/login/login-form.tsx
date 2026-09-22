@@ -152,13 +152,27 @@ const LOGIN_CSS = `
 }
 `;
 
-export default function LoginForm({ tenant }: { tenant: Tenant }) {
+export default function LoginForm({
+  tenant,
+  demoDestino,
+  cpfInicial,
+}: {
+  tenant: Tenant;
+  /**
+   * Modo demonstração: para onde entrar leva. Qualquer número serve — quem
+   * está avaliando a central não tem CPF cadastrado em provedor nenhum, e
+   * exigir um documento válido pararia a visita na primeira tela.
+   */
+  demoDestino?: string;
+  /** Valor que já vem no campo. Usado pela demonstração. */
+  cpfInicial?: string;
+}) {
   const router = useRouter();
   const t = usePortalTokens(tenant);
   // Padrão das centrais brasileiras: entra só com o CPF. O provedor liga a
   // senha em Configurações quando o ERP dele exige.
   const requirePassword = tenant.portal_require_password === true;
-  const [cpf, setCpf] = useState('');
+  const [cpf, setCpf] = useState(() => (cpfInicial ? maskDocument(cpfInicial) : ''));
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -167,6 +181,12 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (demoDestino) {
+      setLoading(true);
+      router.push(demoDestino);
+      return;
+    }
 
     const digits = onlyDigits(cpf);
     if (digits.length !== 11 && digits.length !== 14) {
@@ -269,7 +289,11 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
             <Icon name="user" size={18} />
           </span>
         </div>
-        <div className="lh-hint">Empresa? Informe o CNPJ.</div>
+        <div className="lh-hint">
+          {demoDestino
+            ? 'Demonstração: qualquer número entra.'
+            : 'Empresa? Informe o CNPJ.'}
+        </div>
       </div>
 
       {requirePassword && (
@@ -429,9 +453,11 @@ export default function LoginForm({ tenant }: { tenant: Tenant }) {
                   Acessar minha conta
                 </h2>
                 <p style={{ fontSize: 14, color: t.text2, margin: 0 }}>
-                  {requirePassword
-                    ? 'Use o CPF do titular e a sua senha.'
-                    : 'Use o CPF do titular do contrato.'}
+                  {demoDestino
+                    ? 'Entre com qualquer número — o cadastro desta tela é fictício.'
+                    : requirePassword
+                      ? 'Use o CPF do titular e a sua senha.'
+                      : 'Use o CPF do titular do contrato.'}
                 </p>
               </div>
 

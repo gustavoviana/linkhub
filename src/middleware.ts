@@ -31,6 +31,47 @@ export async function middleware(req: NextRequest) {
   const host = req.headers.get('host') ?? '';
   const subdomain = extractSubdomain(host);
 
+  // A central de demonstração: as mesmas telas do portal, com assinante,
+  // faturas e consumo fictícios, servidas de `src/app/demo`.
+  //
+  // Ela tem endereço próprio — `demo.linkhub.api.br` — e é ali que a
+  // demonstração é servida, em cima do endereço que o visitante abriu. Já foi
+  // um redirecionamento para `/demo` no domínio raiz, e isso custava caro no
+  // único lugar onde não dá para pagar: o provedor manda o link para o cliente
+  // dele, o endereço troca de domínio no primeiro clique e o que era uma
+  // demonstração da marca passa a parecer link errado.
+  //
+  // "demo" não é slug de provedor: está na lista de reservados do cadastro e
+  // da função `create_tenant_with_owner`, então não há provedor de verdade
+  // para atropelar aqui.
+  //
+  // Tudo isto acontece antes do Supabase, de propósito: a demonstração não
+  // tem banco nem sessão, e não pode cair junto com eles.
+  if (subdomain === 'demo') {
+    const caminho = url.pathname;
+
+    // As rotas de dados da demonstração (`/api/demo/*`) e os arquivos já
+    // estão no endereço final — seguem sem reescrita.
+    if (caminho.startsWith('/api') || caminho.startsWith('/_next') || caminho.includes('.')) {
+      return NextResponse.next();
+    }
+
+    // Aqui o prefixo `/demo` é redundante: o subdomínio inteiro já é a
+    // demonstração. Links montados no domínio raiz chegam com ele — mandamos
+    // para o endereço limpo em vez de devolver 404.
+    if (caminho === '/demo' || caminho.startsWith('/demo/')) {
+      const limpo = url.clone();
+      limpo.pathname = caminho.slice('/demo'.length) || '/';
+      return NextResponse.redirect(limpo, { status: 308 });
+    }
+
+    // `/` é a tela de entrada; `/central`, `/central/fatura` e o resto são
+    // as telas de dentro. A URL visível não muda.
+    const interno = url.clone();
+    interno.pathname = caminho === '/' ? '/demo' : `/demo${caminho}`;
+    return NextResponse.rewrite(interno);
+  }
+
   // Em dev, permite `?tenant=demo` ou cookie pra simular subdomínio. Em
   // produção não: quem manda é o subdomínio, senão daria para abrir a central
   // de qualquer provedor pelo domínio raiz só mudando a query string.
@@ -74,6 +115,10 @@ export async function middleware(req: NextRequest) {
   // Com subdomínio → reescreve para /portal/* mantendo a URL visível.
   const pathname = url.pathname;
   if (
+    // A demonstração é rota do domínio raiz e não pertence a provedor nenhum.
+    // Em desenvolvimento o `?tenant=` fica guardado num cookie, e sem esta
+    // linha ele arrastava /demo para dentro de /portal na visita seguinte.
+    pathname.startsWith('/demo') ||
     pathname.startsWith('/portal') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api') ||

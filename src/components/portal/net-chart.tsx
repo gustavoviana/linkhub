@@ -12,6 +12,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 // inventar número de tráfego para o cliente final.
 
 import { Icon } from './icons';
+import { usePortalRuntime } from './runtime';
 import type { ErpUsagePoint, ErpUsageRange } from '@/lib/erp/types';
 import type { PortalTokens } from './tokens';
 import { rgba } from './tokens';
@@ -62,6 +63,10 @@ export function NetChart({
   /** Estica o gráfico até a altura do card — usado no painel web. */
   fill?: boolean;
 }) {
+  // Na demonstração o consumo vem de /api/demo, que devolve a mesma forma de
+  // dado sem pedir sessão nem consultar ERP nenhum.
+  const { demo } = usePortalRuntime();
+  const origem = demo ? '/api/demo/consumo' : '/api/portal/consumo';
   const [range, setRange] = useState<ErpUsageRange>('7d');
   const [cache, setCache] = useState<Partial<Record<ErpUsageRange, NetSeries | null>>>(() => ({
     '7d': series ?? null,
@@ -73,7 +78,7 @@ export function NetChart({
     setLoading(next);
     setFailed(null);
     try {
-      const res = await fetch(`/api/portal/consumo?range=${next}`);
+      const res = await fetch(`${origem}?range=${next}`);
       if (!res.ok) throw new Error(String(res.status));
       const body = (await res.json()) as { usage?: ErpUsagePoint[] };
       setCache((prev) => ({ ...prev, [next]: usageToSeries(body.usage) }));

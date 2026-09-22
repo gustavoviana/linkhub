@@ -1,6 +1,17 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 
+// O endereço da central de demonstração.
+//
+// É `demo.<domínio>` — o endereço divulgado, o que o provedor repassa para o
+// cliente dele e o que cabe num anúncio. Em desenvolvimento não há
+// subdomínio, então o botão cai no caminho equivalente no domínio raiz: as
+// duas portas abrem a mesma central.
+const DEMO_URL =
+  process.env.NODE_ENV === 'production'
+    ? `https://demo.${process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'linkhub.api.br'}`
+    : '/demo';
+
 export default function LandingPage() {
   return (
     <div className="min-h-screen flex flex-col">
@@ -42,7 +53,7 @@ export default function LandingPage() {
               <Link href="/signup">
                 <Button size="lg">Criar meu portal grátis</Button>
               </Link>
-              <Link href="https://demo.linkhub.api.br" target="_blank">
+              <Link href={DEMO_URL} target="_blank">
                 <Button size="lg" variant="outline">Ver portal de demonstração</Button>
               </Link>
             </div>
