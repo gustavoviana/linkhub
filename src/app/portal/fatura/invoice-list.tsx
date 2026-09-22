@@ -129,7 +129,7 @@ function Row({ t, invoice }: { t: ReturnType<typeof portalTokens>; invoice: Invo
         <Icon name={paid ? 'check' : 'file'} size={18} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, textTransform: 'capitalize' }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>
           {invoice.reference_month ? formatMonthYear(invoice.reference_month) : formatDate(invoice.due_date)}
         </div>
         <div style={{ fontSize: 12, color: t.text2 }}>

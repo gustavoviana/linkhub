@@ -32,7 +32,11 @@ export function formatDate(date: string | Date, opts: Intl.DateTimeFormatOptions
 }
 
 export function formatMonthYear(date: string | Date) {
-  return parseDbDate(date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const texto = parseDbDate(date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  // Só a inicial. Quem chamava resolvia isso com `text-transform: capitalize`,
+  // que sobe a letra de toda palavra e escrevia "Outubro De 2026" na lista de
+  // faturas — o "de" é preposição, não é nome de mês.
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
 export function maskCpfCnpj(value: string | null | undefined): string {
