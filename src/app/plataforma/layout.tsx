@@ -1,8 +1,11 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { requirePlatformAdmin } from '@/lib/auth/platform';
 import { Icon } from '@/components/portal/icons';
 import { LogoMark } from '@/components/site/chrome';
 import { NavItem } from '@/components/admin/nav';
+import { ThemeToggle } from '@/components/admin/theme-toggle';
+import { ADMIN_THEME_COOKIE, adminThemeCss, resolveAdminTheme } from '@/lib/admin/theme';
 
 // Painel da plataforma.
 //
@@ -16,10 +19,15 @@ import { NavItem } from '@/components/admin/nav';
 export const dynamic = 'force-dynamic';
 
 export default async function PlatformLayout({ children }: { children: React.ReactNode }) {
-  const session = await requirePlatformAdmin();
+  const [session, store] = await Promise.all([requirePlatformAdmin(), cookies()]);
+  const tema = resolveAdminTheme(store.get(ADMIN_THEME_COOKIE)?.value);
+  const temaCss = adminThemeCss(tema);
 
   return (
     <div className="min-h-screen bg-bg flex">
+      {/* Mesmo cookie do painel do provedor: quem escolhe o tema é a pessoa,
+          e ela é a mesma nos dois lugares. */}
+      {temaCss && <style dangerouslySetInnerHTML={{ __html: temaCss }} />}
       <aside className="w-[248px] bg-bg-2 border-r border-border flex flex-col shrink-0 sticky top-0 h-screen">
         <div className="h-1 bg-warning shrink-0" aria-hidden />
 
@@ -64,6 +72,7 @@ export default async function PlatformLayout({ children }: { children: React.Rea
             <span className="block text-[11.5px] text-fg-2 truncate">{session.email}</span>
             <span className="block text-[10px] text-warning font-semibold">super administrador</span>
           </span>
+          <ThemeToggle tema={tema} />
           <form action="/auth/logout" method="post">
             <button
               type="submit"

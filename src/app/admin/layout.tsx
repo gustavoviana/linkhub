@@ -1,10 +1,13 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { getUser, getUserTenants } from '@/lib/auth/session';
 import { getPlatformSession } from '@/lib/auth/platform';
 import { Icon } from '@/components/portal/icons';
 import { LogoMark } from '@/components/site/chrome';
 import { NavGroup, NavItem } from '@/components/admin/nav';
+import { ThemeToggle } from '@/components/admin/theme-toggle';
+import { ADMIN_THEME_COOKIE, adminThemeCss, resolveAdminTheme } from '@/lib/admin/theme';
 
 // Barra lateral do painel: marca, seletor de provedor, navegação em três
 // blocos (configuração, operação, conta) e o rodapé com o usuário.
@@ -17,11 +20,20 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   const user = await getUser();
   if (!user) redirect('/login?next=/admin');
 
-  const [tenants, platform] = await Promise.all([getUserTenants(), getPlatformSession()]);
+  const [tenants, platform, store] = await Promise.all([
+    getUserTenants(),
+    getPlatformSession(),
+    cookies(),
+  ]);
   const current = tenants[0]?.tenant ?? null;
+  const tema = resolveAdminTheme(store.get(ADMIN_THEME_COOKIE)?.value);
+  const temaCss = adminThemeCss(tema);
 
   return (
     <div className="min-h-screen bg-bg flex">
+      {/* Em :root e não numa div: o body também lê estas variáveis, então o
+          fundo cobre a tela inteira, inclusive no overscroll. */}
+      {temaCss && <style dangerouslySetInnerHTML={{ __html: temaCss }} />}
       <aside className="w-[248px] bg-bg-2 border-r border-border flex flex-col shrink-0 sticky top-0 h-screen">
         <div className="px-4 h-[60px] flex items-center gap-2.5 border-b border-border">
           <LogoMark size={28} />
@@ -112,6 +124,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             {user.email?.[0]?.toUpperCase() ?? '?'}
           </span>
           <span className="flex-1 min-w-0 text-[11.5px] text-fg-2 truncate">{user.email}</span>
+          <ThemeToggle tema={tema} />
           <form action="/auth/logout" method="post">
             <button
               type="submit"
