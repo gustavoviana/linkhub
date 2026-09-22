@@ -10,12 +10,18 @@ import { useEffect, useId, useRef, useState } from 'react';
 // em /api/portal/consumo quando o assinante troca, e ficam em cache aqui.
 // Sem dado do ERP o componente cai num estado vazio honesto — nada de
 // inventar número de tráfego para o cliente final.
+//
+// O gráfico se lê: apontar com o mouse, o dedo ou as setas do teclado abre a
+// leitura do intervalo — quanto cada série gastou naquele dia ou naquela
+// hora. Sem isso, a única coisa que a tela respondia era a forma da curva, e
+// a pergunta que o assinante faz é "quanto eu gastei na terça?".
 
 import { Icon } from './icons';
 import { usePortalRuntime } from './runtime';
 import type { ErpUsagePoint, ErpUsageRange } from '@/lib/erp/types';
 import type { PortalTokens } from './tokens';
 import { rgba } from './tokens';
+import { hexToRgbTriplet } from '@/lib/tenant/theme';
 
 export interface NetSeries {
   /** Um ponto por intervalo (hora ou dia), em GB. */
@@ -43,10 +49,17 @@ export function usageToSeries(usage?: ErpUsagePoint[] | null): NetSeries | null 
   };
 }
 
-const RANGES: { key: ErpUsageRange; label: string; period: string; grain: string }[] = [
-  { key: 'today', label: 'Hoje', period: 'hoje', grain: 'por hora' },
-  { key: '7d', label: '7 dias', period: 'nos últimos 7 dias', grain: 'diária' },
-  { key: '30d', label: '30 dias', period: 'nos últimos 30 dias', grain: 'diária' },
+const RANGES: {
+  key: ErpUsageRange;
+  label: string;
+  period: string;
+  grain: string;
+  /** Como o resumo chama o maior intervalo do período. */
+  pico: string;
+}[] = [
+  { key: 'today', label: 'Hoje', period: 'hoje', grain: 'por hora', pico: 'Maior hora' },
+  { key: '7d', label: '7 dias', period: 'nos últimos 7 dias', grain: 'diária', pico: 'Maior dia' },
+  { key: '30d', label: '30 dias', period: 'nos últimos 30 dias', grain: 'diária', pico: 'Maior dia' },
 ];
 
 export function NetChart({
@@ -99,13 +112,27 @@ export function NetChart({
   const busy = loading === range;
   const broke = failed === range;
 
+  // O último período que chegou a desenhar.
+  //
+  // Enquanto o novo não chega, o card segue mostrando este, esmaecido, em vez
+  // de esvaziar: trocar o gráfico por uma caixa de "carregando" fazia a home
+  // inteira pular de altura a cada clique no seletor de período.
+  const ultimo = useRef<NetSeries | null>(series ?? null);
+  useEffect(() => {
+    if (current) ultimo.current = current;
+  }, [current]);
+  const exibido = current ?? (busy ? ultimo.current : null);
+  const esmaecido = !current && exibido != null;
+
   const subtitle = current
-    ? `${formatVolume(current.totalDownloadGb ?? 0)} ${meta.period}`
+    ? `${formatVolume(current.totalDownloadGb ?? 0)} de download ${meta.period}`
     : busy
       ? 'Carregando…'
       : broke
         ? 'Não foi possível carregar agora'
         : `Sem registro de consumo ${meta.period}`;
+
+  const cores = seriesColors(t);
 
   return (
     <Shell t={t} fill={fill}>
@@ -116,7 +143,7 @@ export function NetChart({
         action={<RangeTabs t={t} value={range} onChange={choose} busy={loading} />}
       />
 
-      {!current ? (
+      {!exibido ? (
         <Placeholder t={t} height={height} fill={fill}>
           {busy ? (
             <span style={{ fontSize: 12, color: t.text2 }}>Carregando consumo…</span>
@@ -167,21 +194,30 @@ export function NetChart({
           )}
         </Placeholder>
       ) : (
-        <>
+        <div
+          // `aria-busy` conta ao leitor de tela o que o esmaecido conta a quem
+          // enxerga: o que está na tela ainda é o período anterior.
+          aria-busy={esmaecido || undefined}
+          style={{
+            opacity: esmaecido ? 0.45 : 1,
+            transition: 'opacity .18s ease',
+            ...(fill
+              ? { flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }
+              : null),
+          }}
+        >
+          <Resumo t={t} series={exibido} meta={meta} cores={cores} />
+
           {t.layout === 'v2' ? (
-            <ChartBars t={t} series={current} height={height} fill={fill} />
+            <ChartBars t={t} series={exibido} height={height} fill={fill} cores={cores} meta={meta} />
           ) : t.layout === 'v3' ? (
-            <ChartRadial t={t} series={current} range={range} />
+            <ChartRadial t={t} series={exibido} range={range} cores={cores} />
           ) : (
-            <ChartArea t={t} series={current} height={height} fill={fill} />
+            <ChartArea t={t} series={exibido} height={height} fill={fill} cores={cores} meta={meta} />
           )}
-          {t.layout !== 'v3' && (
-            <>
-              <Legend t={t} series={current} />
-              <UsageFootnote t={t} grain={meta.grain} />
-            </>
-          )}
-        </>
+
+          <UsageFootnote t={t} grain={meta.grain} />
+        </div>
       )}
     </Shell>
   );
@@ -294,6 +330,264 @@ function useChartBox() {
   }, []);
 
   return { ref, ...box };
+}
+
+/**
+ * As duas cores do gráfico.
+ *
+ * O download sai na cor da marca do provedor — é o número que o assinante
+ * abriu a tela para ver. O upload só sai na cor de destaque quando as duas
+ * são distinguíveis de verdade: marca e destaque, na maioria dos cadastros,
+ * são vizinhas do mesmo tom (um índigo e um índigo mais claro), e duas curvas
+ * assim viram uma mancha só — para todo mundo, e mais ainda para quem tem
+ * daltonismo. Quando é esse o caso, o upload cai num cinza-azulado neutro.
+ * Série secundária em cinza ao lado da série da marca é leitura resolvida;
+ * duas séries na mesma cor é gráfico que não se lê.
+ */
+function seriesColors(t: PortalTokens) {
+  const neutro = t.dark ? '#93a0bd' : '#78839c';
+  return {
+    download: t.accent,
+    upload: distanciaOk(t.accent, t.accent2) ? t.accent2 : neutro,
+  };
+}
+
+/** Distância perceptual mínima entre as duas séries, medida em OKLab. */
+const SEPARACAO_MINIMA = 15;
+
+function distanciaOk(a: string, b: string): boolean {
+  const x = oklab(a);
+  const y = oklab(b);
+  // Cor que não dá para interpretar fica como está: o palpite seria pior.
+  if (!x || !y) return true;
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) * 100 >= SEPARACAO_MINIMA;
+}
+
+function oklab(hex: string): [number, number, number] | null {
+  if (typeof hex !== 'string' || !hex.trim().startsWith('#')) return null;
+  const [r, g, b] = hexToRgbTriplet(hex)
+    .split(' ')
+    .map((v) => {
+      const s = Number(v) / 255;
+      return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    }) as [number, number, number];
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ];
+}
+
+type Cores = ReturnType<typeof seriesColors>;
+type RangeMeta = (typeof RANGES)[number];
+
+/**
+ * Resumo do período: os dois totais e o maior intervalo.
+ *
+ * Também é a legenda — cada total vem com o traço da cor da sua série, então
+ * saber qual curva é qual nunca depende de adivinhar pelo desenho.
+ */
+function Resumo({
+  t,
+  series,
+  meta,
+  cores,
+}: {
+  t: PortalTokens;
+  series: NetSeries;
+  meta: RangeMeta;
+  cores: Cores;
+}) {
+  const picoIndex = series.download.indexOf(Math.max(...series.download));
+  const picoValor = series.download[picoIndex] ?? 0;
+  const picoRotulo = series.labels?.[picoIndex];
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 20,
+        flexWrap: 'wrap',
+        marginBottom: 14,
+        paddingBottom: 12,
+        borderBottom: `1px solid ${t.borderSoft}`,
+      }}
+    >
+      <Numero
+        t={t}
+        chave={cores.download}
+        rotulo="Download"
+        valor={formatVolume(series.totalDownloadGb ?? 0)}
+      />
+      <Numero
+        t={t}
+        chave={cores.upload}
+        rotulo="Upload"
+        valor={formatVolume(series.totalUploadGb ?? 0)}
+      />
+      <Numero t={t} rotulo={meta.pico} valor={formatVolume(picoValor)} nota={picoRotulo} />
+    </div>
+  );
+}
+
+function Numero({
+  t,
+  chave,
+  rotulo,
+  valor,
+  nota,
+}: {
+  t: PortalTokens;
+  /** Cor da série, quando este número é uma delas. */
+  chave?: string;
+  rotulo: string;
+  valor: string;
+  nota?: string;
+}) {
+  return (
+    <div style={{ minWidth: 76 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+        {chave && (
+          <span
+            aria-hidden
+            style={{ width: 12, height: 3, borderRadius: 2, background: chave, flex: 'none' }}
+          />
+        )}
+        <span style={{ fontSize: 11, color: t.text2, fontWeight: 600 }}>{rotulo}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+        <span style={{ fontSize: 15, fontWeight: 700, fontFamily: t.mono, letterSpacing: '-0.01em' }}>
+          {valor}
+        </span>
+        {nota && <span style={{ fontSize: 10, color: t.text3, fontFamily: t.mono }}>{nota}</span>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Leitura do intervalo apontado.
+ *
+ * Fica presa dentro da caixa do gráfico e fora do caminho do dedo: sobe acima
+ * do ponto quando há espaço, desce quando o ponto está colado no topo.
+ */
+function Leitura({
+  t,
+  x,
+  topo,
+  largura,
+  titulo,
+  linhas,
+}: {
+  t: PortalTokens;
+  /** Centro horizontal do ponto, em pixels da caixa. */
+  x: number;
+  /** Altura do ponto mais alto do intervalo. */
+  topo: number;
+  largura: number;
+  titulo: string;
+  linhas: { rotulo: string; valor: string; cor: string }[];
+}) {
+  const acima = topo > 70;
+  const meio = 74;
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'absolute',
+        left: Math.min(Math.max(x, meio), Math.max(largura - meio, meio)),
+        top: acima ? topo - 12 : topo + 20,
+        transform: acima ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+        pointerEvents: 'none',
+        zIndex: 3,
+        minWidth: 132,
+        padding: '8px 10px',
+        borderRadius: 10,
+        background: t.surfaceSolid,
+        border: `1px solid ${t.border}`,
+        boxShadow: `0 12px 26px -14px ${rgba(t.dark ? '#000000' : '#0d0f17', 0.7)}`,
+      }}
+    >
+      <div style={{ fontSize: 10, color: t.text3, fontWeight: 600, letterSpacing: '0.04em' }}>
+        {titulo}
+      </div>
+      {linhas.map((linha) => (
+        <div
+          key={linha.rotulo}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, marginTop: 4 }}
+        >
+          <span
+            aria-hidden
+            style={{ width: 10, height: 2.5, borderRadius: 2, background: linha.cor, flex: 'none' }}
+          />
+          <span style={{ color: t.text2 }}>{linha.rotulo}</span>
+          <span
+            style={{
+              marginLeft: 'auto',
+              fontWeight: 700,
+              fontFamily: t.mono,
+              color: t.text,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {linha.valor}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * O intervalo apontado, com teclado junto.
+ *
+ * O mesmo par de mãos serve os três gráficos: quem aponta com o mouse ou com
+ * o dedo recebe do ponteiro, quem chega pelo Tab anda com as setas. Gráfico
+ * em que só o mouse lê número é meio gráfico.
+ */
+function useAtivo(n: number) {
+  const [ativo, setAtivo] = useState<number | null>(null);
+
+  // Período novo, contagem de pontos nova: o índice guardado pode não existir
+  // mais, e o gráfico apontaria para fora da série.
+  useEffect(() => {
+    setAtivo((prev) => (prev == null || prev < n ? prev : null));
+  }, [n]);
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    const passo = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (passo !== 0) {
+      e.preventDefault();
+      setAtivo((prev) => {
+        const base = prev ?? (passo > 0 ? -1 : n);
+        return Math.min(n - 1, Math.max(0, base + passo));
+      });
+      return;
+    }
+    if (e.key === 'Home') {
+      e.preventDefault();
+      setAtivo(0);
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      setAtivo(n - 1);
+    } else if (e.key === 'Escape') {
+      setAtivo(null);
+    }
+  }
+
+  return { ativo, setAtivo, onKeyDown };
+}
+
+/** Rótulo de acessibilidade comum aos três gráficos. */
+function resumoAcessivel(series: NetSeries, meta: RangeMeta) {
+  return `Consumo de rede ${meta.period}: ${formatVolume(
+    series.totalDownloadGb ?? 0,
+  )} de download e ${formatVolume(
+    series.totalUploadGb ?? 0,
+  )} de upload. Use as setas para percorrer os intervalos.`;
 }
 
 /**
@@ -428,11 +722,15 @@ function ChartArea({
   series,
   height,
   fill,
+  cores,
+  meta,
 }: {
   t: PortalTokens;
   series: NetSeries;
   height: number;
   fill?: boolean;
+  cores: Cores;
+  meta: RangeMeta;
 }) {
   // A home renderiza a versão mobile e a web ao mesmo tempo (uma escondida
   // por CSS). Com id fixo, os dois gráficos disputavam o mesmo gradiente e um
@@ -469,30 +767,57 @@ function ChartArea({
   const peakIndex = download.indexOf(Math.max(...download));
   const ticks = Array.from({ length: divisions + 1 }, (_, i) => (max * i) / divisions);
 
+  const { ativo, setAtivo, onKeyDown } = useAtivo(n);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  /** Índice mais próximo do ponteiro. Quem aponta mira numa data, não num traço. */
+  function indiceEm(clientX: number) {
+    const el = svgRef.current;
+    if (!el) return null;
+    const caixa = el.getBoundingClientRect();
+    // O svg pode estar encolhido por `maxWidth: 100%` entre uma medição e
+    // outra; sem desfazer a escala, o ponteiro aponta para o intervalo errado.
+    const escala = caixa.width > 0 ? caixa.width / W : 1;
+    const px = (clientX - caixa.left) / escala;
+    const i = Math.round(((px - PAD.left) / plotW) * (n - 1));
+    return Math.min(n - 1, Math.max(0, i));
+  }
+
+  const escalaVisual = width > 0 ? Math.min(width, W) / W : 1;
+
   return (
     <div
       ref={ref}
+      tabIndex={0}
+      role="group"
+      aria-label={resumoAcessivel(series, meta)}
+      onKeyDown={onKeyDown}
+      onBlur={() => setAtivo(null)}
       style={{
         width: '100%',
+        position: 'relative',
         ...(fill ? { flex: '1 1 auto', minHeight: height, overflow: 'hidden' } : null),
       }}
     >
       <svg
+        ref={svgRef}
         width={W}
         height={H}
         viewBox={`0 0 ${W} ${H}`}
-        style={{ display: 'block', maxWidth: '100%' }}
+        // `pan-y` deixa a página rolar com o dedo por cima do gráfico; sem
+        // isso, tocar no gráfico prendia a rolagem da home.
+        style={{ display: 'block', maxWidth: '100%', touchAction: 'pan-y' }}
         role="img"
         aria-label={`Consumo de rede: ${formatVolume(series.totalDownloadGb ?? 0)} de download e ${formatVolume(series.totalUploadGb ?? 0)} de upload`}
       >
         <defs>
           <linearGradient id={`dl-${uid}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={t.accent} stopOpacity="0.45" />
-            <stop offset="100%" stopColor={t.accent} stopOpacity="0" />
+            <stop offset="0%" stopColor={cores.download} stopOpacity="0.45" />
+            <stop offset="100%" stopColor={cores.download} stopOpacity="0" />
           </linearGradient>
           <linearGradient id={`ul-${uid}`} x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor={t.accent2} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={t.accent2} stopOpacity="0" />
+            <stop offset="0%" stopColor={cores.upload} stopOpacity="0.32" />
+            <stop offset="100%" stopColor={cores.upload} stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -524,7 +849,7 @@ function ChartArea({
         <path d={area(download)} fill={`url(#dl-${uid})`} />
         <path
           d={line(download)}
-          stroke={t.accent}
+          stroke={cores.download}
           strokeWidth="2.5"
           fill="none"
           strokeLinejoin="round"
@@ -533,23 +858,28 @@ function ChartArea({
         <path d={area(upload)} fill={`url(#ul-${uid})`} />
         <path
           d={line(upload)}
-          stroke={t.accent2}
+          stroke={cores.upload}
           strokeWidth="2"
           fill="none"
           strokeLinejoin="round"
           strokeLinecap="round"
         />
 
-        <line
-          x1={round(x(peakIndex))}
-          y1={round(y(download[peakIndex]!))}
-          x2={round(x(peakIndex))}
-          y2={baseline}
-          stroke={t.text3}
-          strokeDasharray="3 3"
-          strokeWidth="1"
-          opacity="0.45"
-        />
+        {/* A marca do pico sai de cena enquanto o leitor aponta: duas linhas
+            verticais na mesma área viram ruído. */}
+        {ativo == null && (
+          <line
+            x1={round(x(peakIndex))}
+            y1={round(y(download[peakIndex]!))}
+            x2={round(x(peakIndex))}
+            y2={baseline}
+            stroke={t.text3}
+            strokeDasharray="3 3"
+            strokeWidth="1"
+            opacity="0.45"
+          />
+        )}
+
         {n <= 14 &&
           download.map((v, i) => (
             <circle
@@ -557,9 +887,10 @@ function ChartArea({
               cx={round(x(i))}
               cy={round(y(v))}
               r={i === peakIndex ? 4.5 : 3}
-              fill={t.accent}
+              fill={cores.download}
               stroke={t.surfaceSolid}
               strokeWidth="2"
+              opacity={ativo != null && ativo !== i ? 0.45 : 1}
             />
           ))}
 
@@ -570,14 +901,80 @@ function ChartArea({
               x={round(x(i))}
               y={H - 10}
               fontSize="10"
-              fill={t.text3}
+              fill={ativo === i ? t.text : t.text3}
+              fontWeight={ativo === i ? 700 : 400}
               textAnchor={i === n - 1 ? 'end' : i === 0 ? 'start' : 'middle'}
               fontFamily={t.mono}
             >
               {labels[i]}
             </text>
           ))}
+
+        {ativo != null && (
+          <g pointerEvents="none">
+            <line
+              x1={round(x(ativo))}
+              y1={PAD.top}
+              x2={round(x(ativo))}
+              y2={baseline}
+              stroke={t.text3}
+              strokeWidth="1"
+              opacity="0.7"
+            />
+            <circle
+              cx={round(x(ativo))}
+              cy={round(y(upload[ativo]!))}
+              r="4"
+              fill={cores.upload}
+              stroke={t.surfaceSolid}
+              strokeWidth="2"
+            />
+            <circle
+              cx={round(x(ativo))}
+              cy={round(y(download[ativo]!))}
+              r="5"
+              fill={cores.download}
+              stroke={t.surfaceSolid}
+              strokeWidth="2"
+            />
+          </g>
+        )}
+
+        {/* O alvo do ponteiro é a caixa inteira, não a linha de 2px. */}
+        <rect
+          x="0"
+          y="0"
+          width={W}
+          height={H}
+          fill="transparent"
+          onPointerMove={(e) => setAtivo(indiceEm(e.clientX))}
+          onPointerDown={(e) => setAtivo(indiceEm(e.clientX))}
+          onPointerLeave={() => setAtivo(null)}
+          onPointerCancel={() => setAtivo(null)}
+        />
       </svg>
+
+      {ativo != null && (
+        <Leitura
+          t={t}
+          x={x(ativo) * escalaVisual}
+          topo={Math.min(y(download[ativo]!), y(upload[ativo]!)) * escalaVisual}
+          largura={width || W}
+          titulo={labels?.[ativo] ?? meta.label}
+          linhas={[
+            {
+              rotulo: 'Download',
+              valor: formatVolume(series.download[ativo] ?? download[ativo]! / factor),
+              cor: cores.download,
+            },
+            {
+              rotulo: 'Upload',
+              valor: formatVolume(series.upload[ativo] ?? upload[ativo]! / factor),
+              cor: cores.upload,
+            },
+          ]}
+        />
+      )}
     </div>
   );
 }
@@ -587,39 +984,86 @@ function ChartBars({
   series,
   height,
   fill,
+  cores,
+  meta,
 }: {
   t: PortalTokens;
   series: NetSeries;
   height: number;
   fill?: boolean;
+  cores: Cores;
+  meta: RangeMeta;
 }) {
-  const max = Math.max(...series.download, 1);
-  const peakIndex = series.download.indexOf(max);
+  // O topo da escala é a coluna inteira — download mais upload —, senão a
+  // pilha do maior dia passava do teto da caixa. O upload ia plotado a 30% da
+  // altura que lhe cabia, o que é uma segunda escala escondida dentro do
+  // mesmo gráfico: a faixa de baixo parecia três vezes menor do que é.
+  const maxDownload = Math.max(...series.download, 1);
+  const maiorColuna = Math.max(...series.download.map((dl, i) => dl + (series.upload[i] ?? 0)), 1);
+  // Teto redondo, como no eixo do gráfico de área: assim a linha de cima cai
+  // num número que se lê e a maior barra não encosta no topo da caixa.
+  const max = niceCeil(maiorColuna);
+  const peakIndex = series.download.indexOf(maxDownload);
   // Reserva o rodapé para os rótulos, como no gráfico de área.
   const barsHeight = Math.max(120, height - 46);
+  const n = series.download.length;
+  const { ref, width } = useChartBox();
+  const { ativo, setAtivo, onKeyDown } = useAtivo(n);
 
   return (
-    <>
+    <div
+      ref={ref}
+      tabIndex={0}
+      role="group"
+      aria-label={resumoAcessivel(series, meta)}
+      onKeyDown={onKeyDown}
+      onBlur={() => setAtivo(null)}
+      onPointerLeave={() => setAtivo(null)}
+      style={{
+        position: 'relative',
+        ...(fill ? { flex: '1 1 auto', display: 'flex', flexDirection: 'column', minHeight: 0 } : null),
+      }}
+    >
       <div
         style={{
           display: 'flex',
           alignItems: 'flex-end',
-          gap: series.download.length > 14 ? 1 : 3,
+          gap: n > 14 ? 1 : 3,
           height: barsHeight,
           paddingBottom: 4,
+          position: 'relative',
           borderBottom: `1px solid ${t.borderSoft}`,
           ...(fill ? { flex: '1 1 auto', minHeight: barsHeight, height: 'auto' } : null),
         }}
       >
+        {/* Referência do topo: sem ela, a altura das barras não vira número
+            nenhum para quem só passa o olho. */}
+        <div
+          aria-hidden
+          style={{ position: 'absolute', left: 0, right: 0, top: 0, borderTop: `1px solid ${t.borderSoft}` }}
+        />
+        <span
+          aria-hidden
+          style={{ position: 'absolute', right: 0, top: 3, fontSize: 9, color: t.text3, fontFamily: t.mono }}
+        >
+          {`${axisLabel(Number((max * scaleFor(max).factor).toFixed(2)))} ${scaleFor(max).unit}`}
+        </span>
+
         {series.download.map((dl, i) => {
           const ul = series.upload[i] ?? 0;
           const isPeak = i === peakIndex;
+          const isAtivo = i === ativo;
           return (
             // height:100% dá altura definida à coluna. Sem isso a barra, que
             // é medida em porcentagem, não tinha contra o que calcular e
             // colapsava no minHeight — o gráfico de barras saía vazio.
+            //
+            // A coluna inteira é o alvo do ponteiro, não a barra: com 30 dias
+            // cada barra tem três pixels de largura e ninguém acerta.
             <div
               key={i}
+              onPointerEnter={() => setAtivo(i)}
+              onPointerDown={() => setAtivo(i)}
               style={{
                 flex: 1,
                 height: '100%',
@@ -628,75 +1072,136 @@ function ChartBars({
                 justifyContent: 'flex-end',
                 alignItems: 'center',
                 gap: 1,
+                // Cinza, não a cor da marca: um véu colorido na coluna inteira
+                // ficava com cara de uma segunda barra atrás da barra.
+                background: isAtivo ? rgba(t.text3, 0.1) : 'transparent',
+                borderRadius: 4,
               }}
             >
               <div
                 style={{
                   width: '100%',
                   height: `${(dl / max) * 100}%`,
-                  background: isPeak ? t.accentGrad : t.accent,
+                  background: isPeak || isAtivo ? t.accentGrad : cores.download,
                   borderRadius: '4px 4px 0 0',
                   minHeight: 2,
+                  opacity: ativo != null && !isAtivo ? 0.55 : 1,
+                  transition: 'opacity .12s ease',
                 }}
               />
               <div
                 style={{
                   width: '100%',
-                  height: `${(ul / max) * 30}%`,
-                  background: t.accent2,
+                  height: `${(ul / max) * 100}%`,
+                  background: cores.upload,
                   borderRadius: '0 0 2px 2px',
                   minHeight: 1,
-                  opacity: 0.6,
+                  opacity: ativo != null && !isAtivo ? 0.3 : 0.6,
+                  transition: 'opacity .12s ease',
                 }}
               />
             </div>
           );
         })}
       </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6, fontSize: 10, color: t.text3, fontFamily: t.mono }}>
         <span>{series.labels?.[0]}</span>
         <span>{series.labels?.[series.labels.length - 1]}</span>
       </div>
-    </>
+
+      {ativo != null && (
+        <Leitura
+          t={t}
+          x={((ativo + 0.5) / n) * (width || 300)}
+          topo={barsHeight - (series.download[ativo]! / max) * barsHeight}
+          largura={width || 300}
+          titulo={series.labels?.[ativo] ?? meta.label}
+          linhas={[
+            { rotulo: 'Download', valor: formatVolume(series.download[ativo]!), cor: cores.download },
+            { rotulo: 'Upload', valor: formatVolume(series.upload[ativo] ?? 0), cor: cores.upload },
+          ]}
+        />
+      )}
+    </div>
   );
 }
 
-function ChartRadial({ t, series, range }: { t: PortalTokens; series: NetSeries; range: ErpUsageRange }) {
+/**
+ * Anel do layout Bold.
+ *
+ * O anel divide o tráfego do período entre download e upload, e o centro traz
+ * o total. Já foi um medidor contra um "limite" que era o próprio consumo
+ * multiplicado por 1,6 — ou seja, marcava os mesmos 62% fosse qual fosse o
+ * consumo, e um medidor que não se mexe é enfeite com cara de dado. Plano
+ * residencial não tem franquia, então não existe denominador honesto para um
+ * medidor; a divisão entre as duas séries existe de verdade.
+ */
+function ChartRadial({
+  t,
+  series,
+  range,
+  cores,
+}: {
+  t: PortalTokens;
+  series: NetSeries;
+  range: ErpUsageRange;
+  cores: Cores;
+}) {
   const uid = useId().replace(/:/g, '');
-  const used = series.totalDownloadGb ?? 0;
-  const limit = Math.max(used * 1.6, 0.001);
-  const pct = used / limit;
+  const down = series.totalDownloadGb ?? 0;
+  const up = series.totalUploadGb ?? 0;
+  const total = down + up;
+  const fatiaDown = total > 0 ? down / total : 1;
   const r = 64;
   const C = 2 * Math.PI * r;
+  // Respiro entre os dois arcos, para um não encostar no outro. Nunca maior
+  // que a fatia que ele vai encurtar: numa conta com upload minúsculo, o vão
+  // fixo comia o arco inteiro.
+  const vao = Math.min(C * 0.012, C * fatiaDown * 0.4, C * (1 - fatiaDown) * 0.4);
   const max = Math.max(...series.download, 1);
-  const legend = range === 'today' ? 'consumidos hoje' : range === '30d' ? 'em 30 dias' : 'em 7 dias';
+  const legenda = range === 'today' ? 'de tráfego hoje' : 'de tráfego';
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginTop: 8 }}>
       <svg
         viewBox="-90 -90 180 180"
-        style={{ width: '100%', maxWidth: 180, height: 'auto', transform: 'rotate(-90deg)' }}
+        style={{ width: '100%', maxWidth: 210, height: 'auto', transform: 'rotate(-90deg)' }}
+        role="img"
+        aria-label={`${formatVolume(total)} de tráfego: ${formatVolume(down)} de download e ${formatVolume(up)} de upload`}
       >
         <defs>
           <linearGradient id={`rad-${uid}`} x1="0" x2="1" y1="0" y2="1">
-            <stop offset="0%" stopColor={t.accent} />
+            <stop offset="0%" stopColor={cores.download} />
             <stop offset="100%" stopColor={t.accent2} />
           </linearGradient>
         </defs>
+
         <circle r={r} fill="none" stroke={t.borderSoft} strokeWidth="14" />
+        {/* Download: do topo, no sentido do relógio. */}
         <circle
           r={r}
           fill="none"
           stroke={`url(#rad-${uid})`}
           strokeWidth="14"
-          strokeLinecap="round"
-          strokeDasharray={C}
-          strokeDashoffset={C * (1 - pct)}
+          strokeDasharray={`${Math.max(C * fatiaDown - vao, 0)} ${C}`}
         />
+        {/* Upload: emenda onde o download termina. */}
+        <circle
+          r={r}
+          fill="none"
+          stroke={cores.upload}
+          strokeWidth="14"
+          strokeDasharray={`${Math.max(C * (1 - fatiaDown) - vao, 0)} ${C}`}
+          strokeDashoffset={-C * fatiaDown}
+        />
+
         {series.download.map((v, i) => {
           const rad = ((i / series.download.length) * 360 * Math.PI) / 180;
-          const inner = 38;
-          const len = 4 + (v / max) * 14;
+          // Encostados no anel, não no texto do centro: a 38 eles passavam
+          // por cima do número.
+          const inner = 44;
+          const len = 2 + (v / max) * 10;
           return (
             <line
               key={i}
@@ -704,7 +1209,7 @@ function ChartRadial({ t, series, range }: { t: PortalTokens; series: NetSeries;
               y1={Math.sin(rad) * inner}
               x2={Math.cos(rad) * (inner + len)}
               y2={Math.sin(rad) * (inner + len)}
-              stroke={t.accent}
+              stroke={cores.download}
               strokeWidth="2"
               strokeLinecap="round"
               opacity={0.8}
@@ -712,35 +1217,17 @@ function ChartRadial({ t, series, range }: { t: PortalTokens; series: NetSeries;
           );
         })}
       </svg>
-      <div style={{ position: 'absolute', textAlign: 'center' }}>
-        <div style={{ fontSize: 10, color: t.text2, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-          Usado
-        </div>
-        <div style={{ fontSize: 24, fontWeight: 800, fontFamily: t.mono, letterSpacing: '-0.02em' }}>
-          {formatVolume(used)}
-        </div>
-        <div style={{ fontSize: 10, color: t.text3 }}>{legend}</div>
-      </div>
-    </div>
-  );
-}
 
-function Legend({ t, series }: { t: PortalTokens; series: NetSeries }) {
-  return (
-    <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-        <span style={{ width: 10, height: 10, borderRadius: 3, background: t.accent }} />
-        <span style={{ color: t.text2 }}>Download</span>
-        {series.totalDownloadGb != null && (
-          <span style={{ fontWeight: 700, fontFamily: t.mono }}>{formatVolume(series.totalDownloadGb)}</span>
-        )}
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-        <span style={{ width: 10, height: 10, borderRadius: 3, background: t.accent2 }} />
-        <span style={{ color: t.text2 }}>Upload</span>
-        {series.totalUploadGb != null && (
-          <span style={{ fontWeight: 700, fontFamily: t.mono }}>{formatVolume(series.totalUploadGb)}</span>
-        )}
+      {/* O texto vive dentro do furo do anel: a largura é a do furo, não a
+          do card, senão o número atravessa o aro. */}
+      <div style={{ position: 'absolute', textAlign: 'center', maxWidth: 104 }}>
+        <div style={{ fontSize: 10, color: t.text2, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+          Total
+        </div>
+        <div style={{ fontSize: 21, fontWeight: 800, fontFamily: t.mono, letterSpacing: '-0.02em' }}>
+          {formatVolume(total)}
+        </div>
+        <div style={{ fontSize: 10, color: t.text3 }}>{legenda}</div>
       </div>
     </div>
   );
