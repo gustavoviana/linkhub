@@ -219,10 +219,29 @@ function explainIxcError(e: unknown): string {
   return explicarErroDoErp('ixc', e);
 }
 
+/**
+ * Consultas que o IXC acabou de recusar, por instalação + credencial + filtro.
+ *
+ * Quando o usuário da API não tem permissão numa tabela (a LM NET não alcança
+ * `radusuarios`, e a contabilidade dela devolve erro), a central perguntava de
+ * novo a cada abertura — sete chamadas em fila, todas negadas, ~0,7 a 1 s
+ * antes da tela pintar. A recusa é configuração do provedor, não muda de um
+ * segundo para o outro: lembrada por alguns minutos, as aberturas seguintes
+ * pulam direto para o resultado. Erro de rede e HTTP não entram aqui — esses
+ * podem ser passageiros.
+ */
+const RECUSA_TTL_MS = 10 * 60_000;
+const recusasRecentes = new Map<string, { motivo: string; expira: number }>();
+
+/** Teto de espera por resposta do IXC: sem ele, um ERP travado trava a central. */
+const IXC_TIMEOUT_MS = 12_000;
+
 export class IxcAdapter implements ErpAdapter {
   name = 'ixc';
   private baseUrl: string;
   private auth: string;
+  /** O diagnóstico precisa perguntar de verdade, nunca à memória de recusas. */
+  private lembrarRecusas = true;
 
   constructor(cfg: NonNullable<ErpConfig['ixc']>) {
     this.baseUrl = normalizeBaseUrl(cfg.baseUrl);
@@ -230,6 +249,14 @@ export class IxcAdapter implements ErpAdapter {
   }
 
   private async req<T = unknown>(resource: string, body: Record<string, unknown>): Promise<T> {
+    const chave = `${this.baseUrl}|${this.auth}|${resource}|${String(body.qtype ?? '')}`;
+    if (this.lembrarRecusas) {
+      const lembrada = recusasRecentes.get(chave);
+      if (lembrada && lembrada.expira > Date.now()) {
+        throw new Error(`IXC ${resource}: ${lembrada.motivo}`);
+      }
+    }
+
     const url = `${this.baseUrl}/webservice/v1/${resource}`;
     const r = await fetch(url, {
       method: 'POST',
@@ -240,16 +267,22 @@ export class IxcAdapter implements ErpAdapter {
       },
       body: JSON.stringify(body),
       cache: 'no-store',
+      signal: AbortSignal.timeout(IXC_TIMEOUT_MS),
     });
     if (!r.ok) throw new Error(`IXC ${resource} ${r.status}: ${await r.text()}`);
 
     const payload = (await r.json()) as T;
     const recusa = motivoDaRecusa(payload);
-    if (recusa) throw new Error(`IXC ${resource}: ${recusa}`);
+    if (recusa) {
+      recusasRecentes.set(chave, { motivo: recusa, expira: Date.now() + RECUSA_TTL_MS });
+      throw new Error(`IXC ${resource}: ${recusa}`);
+    }
+    recusasRecentes.delete(chave);
     return payload;
   }
 
   async testConnection() {
+    this.lembrarRecusas = false;
     try {
       await this.req('cliente', { qtype: 'cliente.id', query: '0', oper: '=', page: '1', rp: '1' });
       return { ok: true };
@@ -275,6 +308,9 @@ export class IxcAdapter implements ErpAdapter {
    * `id_contrato` zerado, e procurá-la pelo contrato não devolve nada.
    */
   async diagnose(cpf?: string): Promise<ErpCheck[]> {
+    // O provedor costuma rodar o diagnóstico logo depois de liberar uma
+    // permissão no IXC — a resposta tem que ser a de agora.
+    this.lembrarRecusas = false;
     const checks: ErpCheck[] = [];
 
     const sondar = async (

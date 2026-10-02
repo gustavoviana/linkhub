@@ -19,6 +19,23 @@ export const getUser = cache(async () => {
   return user;
 });
 
+/**
+ * Id do usuário logado, sem ir ao servidor de auth.
+ *
+ * O projeto assina os tokens com chave assimétrica (ES256): `getClaims()`
+ * confere a assinatura aqui mesmo, com a chave pública guardada em memória, e
+ * só vai à rede se o token for do formato antigo. A central só precisa saber
+ * *quem* é o assinante — e isso custava uma volta inteira até o Supabase
+ * (~230 ms medidos a partir de gru1) em toda tela. As consultas seguintes
+ * levam o mesmo token, e o RLS do banco o confere de novo.
+ */
+export const getUserId = cache(async (): Promise<string | null> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data?.claims?.sub) return null;
+  return data.claims.sub;
+});
+
 export async function requireUser() {
   const user = await getUser();
   if (!user) redirect('/login');
@@ -58,14 +75,14 @@ export async function requireTenantAdmin(tenantId: string, minRole: AdminRole = 
 }
 
 export async function getCurrentCustomer(tenantId: string): Promise<Customer | null> {
-  const user = await getUser();
-  if (!user) return null;
+  const userId = await getUserId();
+  if (!userId) return null;
   const supabase = await createClient();
   const { data } = await supabase
     .from('customers')
     .select('*')
     .eq('tenant_id', tenantId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .maybeSingle();
   return (data ?? null) as Customer | null;
 }
@@ -79,8 +96,8 @@ export async function getCurrentCustomer(tenantId: string): Promise<Customer | n
  * do assinante precisa esperar, porque depende das duas respostas.
  */
 export async function getPortalSession(): Promise<{ tenant: Tenant; customer: Customer | null }> {
-  const [tenant] = await Promise.all([requireTenant(), getUser()]);
-  // getUser() já resolveu acima e está em cache nesta requisição.
+  const [tenant] = await Promise.all([requireTenant(), getUserId()]);
+  // getUserId() já resolveu acima e está em cache nesta requisição.
   const customer = await getCurrentCustomer(tenant.id);
   return { tenant, customer };
 }

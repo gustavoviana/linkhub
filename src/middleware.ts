@@ -107,7 +107,11 @@ export async function middleware(req: NextRequest) {
       },
     },
   );
-  await supabase.auth.getUser();
+  // getClaims() renova o token vencido (e grava o cookie novo pelo setAll
+  // acima) como o getUser() fazia, mas confere a assinatura localmente: com
+  // chave ES256 não há ida ao servidor de auth em cada requisição. Quem decide
+  // acesso são as telas e o RLS, não este ponto.
+  await supabase.auth.getClaims();
 
   // Sem subdomínio → rotas root (landing, admin, api, auth).
   if (!tenantSlug) return response;

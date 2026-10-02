@@ -127,6 +127,32 @@ export default async function PortalHome() {
 
   const contract: Contract | null = contracts?.[0] ?? null;
 
+  // Conexão e consumo são ao vivo: nada disso fica no nosso banco, é sempre
+  // o que o ERP responde agora. Falha aqui não pode derrubar a central.
+  //
+  // Sai já, sem await: só depende do contrato, e esperar o plano e as faturas
+  // antes de perguntar ao ERP somava as duas esperas em vez de sobrepô-las.
+  const aoVivo = (async () => {
+    let connection: ErpConnection | null = null;
+    let usage: ErpUsagePoint[] = [];
+    if (!contract?.external_id) return { connection, usage };
+    try {
+      connection = (await adapter.getConnection?.(contract.external_id)) ?? null;
+    } catch (e) {
+      console.error('[portal] connection lookup failed', e);
+    }
+    try {
+      // Reaproveita o login que já veio da conexão — sem isso o adapter
+      // consultaria o ERP de novo só para descobrir o mesmo usuário.
+      // Só o período padrão vem no HTML; "hoje" e "30 dias" são buscados
+      // pelo gráfico quando o assinante troca, em /api/portal/consumo.
+      usage = (await adapter.getUsage?.(contract.external_id, '7d', connection?.login)) ?? [];
+    } catch (e) {
+      console.error('[portal] usage lookup failed', e);
+    }
+    return { connection, usage };
+  })();
+
   // O plano do assinante vem no próprio contrato em vários ERPs (o IXC manda
   // "MARAUNET-PLANO-500X500 2026"). Se ele ainda não existe no catálogo,
   // materializamos aqui — senão a central mostraria "sem plano vinculado"
@@ -195,26 +221,7 @@ export default async function PortalHome() {
     aguardandoFaturas = !abertas.length && !pagas.length && !contract.last_synced_at;
   }
 
-  // Conexão e consumo são ao vivo: nada disso fica no nosso banco, é sempre
-  // o que o ERP responde agora. Falha aqui não pode derrubar a central.
-  let connection: ErpConnection | null = null;
-  let usage: ErpUsagePoint[] = [];
-  if (contract?.external_id) {
-    try {
-      connection = (await adapter.getConnection?.(contract.external_id)) ?? null;
-    } catch (e) {
-      console.error('[portal] connection lookup failed', e);
-    }
-    try {
-      // Reaproveita o login que já veio da conexão — sem isso o adapter
-      // consultaria o ERP de novo só para descobrir o mesmo usuário.
-      // Só o período padrão vem no HTML; "hoje" e "30 dias" são buscados
-      // pelo gráfico quando o assinante troca, em /api/portal/consumo.
-      usage = (await adapter.getUsage?.(contract.external_id, '7d', connection?.login)) ?? [];
-    } catch (e) {
-      console.error('[portal] usage lookup failed', e);
-    }
-  }
+  const { connection, usage } = await aoVivo;
 
   const props = {
     tenant,
