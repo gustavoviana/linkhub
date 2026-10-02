@@ -55,7 +55,10 @@ const LOGIN_CSS = `
 .lh-h1{font-size:27px;line-height:1.14;font-weight:800;letter-spacing:-.03em;
   color:#fff;margin:0 0 8px}
 .lh-sub{font-size:14px;line-height:1.55;color:rgba(255,255,255,.78);margin:0}
-.lh-card{display:flex;flex-direction:column;gap:14px}
+/* Não pode se chamar .lh-card: essa é a classe global de cartão do painel, que
+   pinta fundo sólido — no tema claro o formulário virava um bloco branco com
+   os campos de vidro (texto branco) invisíveis dentro. */
+.lh-acesso{display:flex;flex-direction:column;gap:14px}
 .lh-foot{padding-top:22px;text-align:center;font-size:12px;color:rgba(255,255,255,.6)}
 
 /* ── Marca ────────────────────────────────────────────────────────────── */
@@ -87,7 +90,7 @@ const LOGIN_CSS = `
 .lh-ajuda{text-align:center;font-size:13px;font-weight:600;margin-top:4px;color:#fff}
 
 /* V3 no celular: folha opaca subindo do rodapé, como no protótipo. */
-[data-model="v3"] .lh-card{background:var(--lh-surface);margin:6px -22px -30px;
+[data-model="v3"] .lh-acesso{background:var(--lh-surface);margin:6px -22px -30px;
   padding:24px 22px 34px;border-radius:28px 28px 0 0;
   box-shadow:0 -14px 40px -12px rgba(0,0,0,.35)}
 [data-model="v3"] .lh-label{color:var(--lh-text)}
@@ -104,7 +107,7 @@ const LOGIN_CSS = `
 [data-model="v3"] .lh-foot{color:rgba(255,255,255,.75)}
 
 /* V2 no celular: cartão de vidro em volta do formulário. */
-[data-model="v2"] .lh-card{padding:18px;border-radius:22px;
+[data-model="v2"] .lh-acesso{padding:18px;border-radius:22px;
   background:rgba(12,10,26,.45);border:1px solid rgba(255,255,255,.14);
   -webkit-backdrop-filter:blur(22px) saturate(160%);backdrop-filter:blur(22px) saturate(160%)}
 
@@ -139,10 +142,10 @@ const LOGIN_CSS = `
   .lh-erro{color:var(--lh-danger);background:var(--lh-danger-soft);border-color:var(--lh-danger-soft)}
   .lh-ajuda{color:var(--lh-accent)}
   .lh-foot{color:var(--lh-text3)}
-  .lh-card{gap:14px}
-  [data-model="v3"] .lh-card{background:transparent;margin:0;padding:0;
+  .lh-acesso{gap:14px}
+  [data-model="v3"] .lh-acesso{background:transparent;margin:0;padding:0;
     border-radius:0;box-shadow:none}
-  [data-model="v2"] .lh-card{padding:24px;border-radius:24px;
+  [data-model="v2"] .lh-acesso{padding:24px;border-radius:24px;
     background:var(--lh-glass);border:1px solid var(--lh-border);
     box-shadow:0 28px 60px -20px rgba(0,0,0,.45)}
 
@@ -447,7 +450,7 @@ export default function LoginForm({
               <p className="lh-sub">{subtitle}</p>
             </div>
 
-            <div className="lh-card">
+            <div className="lh-acesso">
               <div className="lh-desk">
                 <h2 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.025em', margin: '0 0 6px' }}>
                   Acessar minha conta
