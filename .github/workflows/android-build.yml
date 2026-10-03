@@ -42,8 +42,15 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # O padrão da action é "tools platform-tools", e o pacote "tools" saiu
+      # do repositório do SDK (out/2026): o sdkmanager falhava antes de
+      # qualquer coisa do app. Listamos só o que o build usa — a plataforma
+      # do compileSdk 36 e as build-tools do Android Gradle Plugin 8.9.
       - name: Preparar SDK do Android
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-36 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
 
       - name: Buscar a ficha do app
         id: config
