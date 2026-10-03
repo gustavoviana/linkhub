@@ -11,7 +11,8 @@
 // Pendente de verificação é o caso comum: o DNS de ${ROOT} mora na
 // Cloudflare, e a Vercel pede um TXT em _vercel.<raiz> por subdomínio. Com
 // CLOUDFLARE_API_TOKEN no .env.local o script publica esse TXT, pede a
-// verificação e o certificado; sem ele, só imprime o registro a criar.
+// verificação (o certificado a Vercel emite sozinha); sem ele, só imprime o
+// registro a criar.
 //
 // Lê as credenciais do .env.local (ou do ambiente, se já estiverem exportadas).
 
@@ -134,7 +135,7 @@ async function publicarTxt(name, value) {
 
 const espera = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** Publica o TXT, pede a verificação (com paciência) e o certificado. */
+/** Publica o TXT e pede a verificação (com paciência). O certificado vem sozinho. */
 async function resolverPendente(domain, verification) {
   if (!CF_TOKEN || !domain.endsWith(`.${ROOT}`)) return false;
   for (const v of verification.filter((x) => x.type === 'TXT')) {
@@ -146,8 +147,7 @@ async function resolverPendente(domain, verification) {
       method: 'POST',
     });
     if (r.ok && r.body.verified === true) {
-      const c = await vercel('/v8/certs', { method: 'POST', body: JSON.stringify({ cns: [domain] }) });
-      console.log(`           verificado; certificado ${c.ok ? 'pedido' : `não pedido (${c.body?.error?.message ?? c.status})`}`);
+      console.log('           verificado; a Vercel emite o certificado em 1 a 6 minutos');
       return true;
     }
   }
@@ -209,6 +209,6 @@ console.log(
 );
 console.log(
   CF_TOKEN
-    ? 'O certificado sai em até um minuto depois do domínio ficar verificado.'
+    ? 'O certificado sai sozinho de 1 a 6 minutos depois do domínio ficar verificado.'
     : 'Sem CLOUDFLARE_API_TOKEN: publique os TXT acima na Cloudflare e rode de novo.',
 );

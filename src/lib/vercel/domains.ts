@@ -306,9 +306,9 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus> {
           await new Promise((r) => setTimeout(r, espera));
           if ((verified = await verifyDomain(domain))) break;
         }
-        // Posse provada agora: pede o certificado já, em vez de esperar a
-        // emissão automática da Vercel, que às vezes não vem.
-        if (verified) await issueCertificate(domain);
+        // Não pedimos o certificado aqui: o /v8/certs recusa ("no permission")
+        // porque o domínio raiz não está na conta da Vercel. Ela emite sozinha,
+        // de 1 a 6 minutos depois da verificação — medido em out/2026.
       }
     }
 
