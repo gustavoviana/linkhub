@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import DomainForm from './domain-form';
 
 export const dynamic = 'force-dynamic';

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { enviarImagem } from '@/lib/images/enviar';
 import { Button } from '@/components/ui/button';
 import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
@@ -77,19 +77,14 @@ export default function AppForm({
     }
     setUploading(true);
     setError(null);
-    const supabase = createClient();
     const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png';
-    const path = `tenants/${tenant.id}/app-icon-${Date.now()}.${ext}`;
-    const { error: upErr } = await supabase.storage
-      .from('tenant-assets')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+    const enviado = await enviarImagem(tenant.id, 'app-icon', file, ext);
     setUploading(false);
-    if (upErr) {
-      setError(upErr.message);
+    if ('error' in enviado) {
+      setError(enviado.error);
       return;
     }
-    const { data } = supabase.storage.from('tenant-assets').getPublicUrl(path);
-    setForm((f) => ({ ...f, icon_url: data.publicUrl }));
+    setForm((f) => ({ ...f, icon_url: enviado.url }));
   }
 
   async function save(e: React.FormEvent) {

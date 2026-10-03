@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getBuild, ARTIFACT_BUCKET } from '@/lib/tenant/app-store-db';
 

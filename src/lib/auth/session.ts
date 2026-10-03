@@ -2,9 +2,8 @@ import 'server-only';
 import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
 import { requireTenant } from '@/lib/tenant/resolve';
-import type { Tenant, TenantAdmin, Customer, AdminRole } from '@/lib/supabase/types';
+import type { Tenant, TenantAdmin, Customer } from '@/lib/supabase/types';
 
 /**
  * Usuário da sessão, uma vez por requisição.
@@ -56,22 +55,6 @@ export async function getUserTenants(): Promise<Array<{ admin: TenantAdmin; tena
     admin: { ...row, tenant: undefined } as TenantAdmin,
     tenant: row.tenant as Tenant,
   }));
-}
-
-export async function requireTenantAdmin(tenantId: string, minRole: AdminRole = 'admin'): Promise<TenantAdmin> {
-  const user = await requireUser();
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from('tenant_admins')
-    .select('*')
-    .eq('tenant_id', tenantId)
-    .eq('user_id', user.id)
-    .single();
-  if (!data) redirect('/admin');
-  const row = data as unknown as TenantAdmin;
-  const rank: Record<AdminRole, number> = { viewer: 0, support: 1, admin: 2, owner: 3 };
-  if (rank[row.role] < rank[minRole]) redirect('/admin');
-  return row;
 }
 
 export async function getCurrentCustomer(tenantId: string): Promise<Customer | null> {

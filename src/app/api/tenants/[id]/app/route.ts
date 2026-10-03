@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
 import { ensureTenantApp, APP_TABLE_MISSING } from '@/lib/tenant/app-store-db';

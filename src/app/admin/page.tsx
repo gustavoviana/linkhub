@@ -5,17 +5,29 @@ import { getPlatformSession } from '@/lib/auth/platform';
 import { Card, CardBody } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AdminScreen } from '@/components/admin/page-header';
+import { createAdminClient } from '@/lib/supabase/admin';
+import type { Tenant } from '@/lib/supabase/types';
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? 'linkhub.api.br';
 
 export default async function AdminHome() {
-  const tenants = await getUserTenants();
+  const [proprios, platform] = await Promise.all([getUserTenants(), getPlatformSession()]);
+
+  // O super administrador escolhe entre todos os provedores — os dele com o
+  // cargo que tem, os outros como super administrador.
+  const tenants: Array<{ tenant: Tenant; cargo: string }> = proprios.map(({ tenant, admin }) => ({
+    tenant,
+    cargo: admin.role,
+  }));
+  if (platform) {
+    const meus = new Set(tenants.map(({ tenant }) => tenant.id));
+    const { data } = await createAdminClient().from('tenants').select('*').order('name');
+    for (const row of (data ?? []) as Tenant[]) {
+      if (!meus.has(row.id)) tenants.push({ tenant: row, cargo: 'super admin' });
+    }
+  }
 
   if (tenants.length === 0) {
-    // Super administrador sem provedor próprio: o lugar dele é a plataforma.
-    const platform = await getPlatformSession();
-    if (platform) redirect('/plataforma');
-
     return (
       <AdminScreen
         eyebrow="Conta"
@@ -28,7 +40,7 @@ export default async function AdminHome() {
     );
   }
 
-  if (tenants.length === 1) {
+  if (tenants.length === 1 && !platform) {
     redirect(`/admin/tenants/${tenants[0].tenant.id}`);
   }
 
@@ -41,7 +53,7 @@ export default async function AdminHome() {
     >
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {tenants.map(({ tenant, admin }) => (
+        {tenants.map(({ tenant, cargo }) => (
           <Card key={tenant.id} className="hover:border-brand transition-colors">
             <Link href={`/admin/tenants/${tenant.id}`}>
               <CardBody>
@@ -63,7 +75,7 @@ export default async function AdminHome() {
                   </Badge>
                 </div>
                 <div className="text-xs text-fg-3 flex items-center gap-3">
-                  <span>Cargo: {admin.role}</span>
+                  <span>Cargo: {cargo}</span>
                   <span>•</span>
                   <span>Layout {tenant.layout.toUpperCase()}</span>
                   <span>•</span>

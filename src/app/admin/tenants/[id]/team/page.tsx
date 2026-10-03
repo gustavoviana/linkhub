@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asAdmins } from '@/lib/supabase/helpers';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AdminScreen } from '@/components/admin/page-header';

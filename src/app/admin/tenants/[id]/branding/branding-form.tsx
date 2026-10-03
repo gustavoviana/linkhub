@@ -2,13 +2,13 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import type { Tenant, TenantLayout } from '@/lib/supabase/types';
 import type { PreviewTheme } from '@/lib/tenant/preview-protocol';
 import { converterParaWebp, formatarBytes } from '@/lib/images/webp';
+import { enviarImagem } from '@/lib/images/enviar';
 import { LOGIN_HEADLINE_PADRAO, LOGIN_SUBTITLE_PADRAO } from '@/lib/portal/login-copy';
 import { PhonePreview } from './phone-preview';
 import { StoreExport } from './store-export';
@@ -31,9 +31,6 @@ const LAYOUTS: { id: TenantLayout; name: string; desc: string }[] = [
 ];
 
 type AssetKey = 'logo_url' | 'logo_dark_url' | 'favicon_url' | 'login_image_url';
-
-/** Colunas que dependem de migração ainda não aplicada em todo banco. */
-const COLUNAS_NOVAS = ['logo_dark_url', 'login_image_url', 'login_headline', 'login_subtitle'];
 
 export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   const router = useRouter();
@@ -64,7 +61,7 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
   // que importa é o tamanho depois — o provedor pode mandar a foto do celular.
   const MAX_FOTO_BYTES = 12 * 1024 * 1024;
 
-  const PASTA: Record<AssetKey, string> = {
+  const PASTA: Record<AssetKey, 'logo' | 'logo-dark' | 'favicon' | 'login'> = {
     logo_url: 'logo',
     logo_dark_url: 'logo-dark',
     favicon_url: 'favicon',
@@ -97,18 +94,18 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
           bytesDepois: file.size,
         };
 
-    const supabase = createClient();
-    const path = `tenants/${tenant.id}/${PASTA[field]}-${Date.now()}.${arte.ext}`;
-    const { error: upErr } = await supabase.storage
-      .from('tenant-assets')
-      .upload(path, arte.blob, { cacheControl: '3600', upsert: false, contentType: arte.tipo });
-    if (upErr) {
-      setError(upErr.message);
+    const enviado = await enviarImagem(
+      tenant.id,
+      PASTA[field],
+      arte.blob.type ? arte.blob : new Blob([arte.blob], { type: arte.tipo }),
+      arte.ext,
+    );
+    if ('error' in enviado) {
+      setError(enviado.error);
       setUploading(null);
       return;
     }
-    const { data: pub } = supabase.storage.from('tenant-assets').getPublicUrl(path);
-    setForm((f) => ({ ...f, [field]: pub.publicUrl }));
+    setForm((f) => ({ ...f, [field]: enviado.url }));
     if (ehFoto && arte.bytesDepois < arte.bytesAntes) {
       setAviso(
         `Foto convertida para WebP: ${formatarBytes(arte.bytesAntes)} → ${formatarBytes(arte.bytesDepois)}. ` +
@@ -140,8 +137,7 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const supabase = createClient();
-    const update: Record<string, unknown> = {
+    const update = {
       name: form.name,
       primary_color: form.primary_color,
       accent_color: form.accent_color,
@@ -157,29 +153,24 @@ export default function BrandingForm({ tenant }: { tenant: Tenant }) {
       support_whatsapp: form.support_whatsapp || null,
       support_email: form.support_email || null,
     };
-    let { error } = await (supabase.from('tenants').update(update as never)).eq('id', tenant.id);
-
-    // Banco ainda sem as migrações 007/008: em vez de perder o que o provedor
-    // acabou de ajustar, salva o resto e diz o que ficou de fora.
-    const faltando = COLUNAS_NOVAS.filter((c) => error && error.message.includes(c));
-    if (faltando.length) {
-      const parcial = { ...update };
-      for (const c of COLUNAS_NOVAS) delete parcial[c];
-      ({ error } = await (supabase.from('tenants').update(parcial as never)).eq('id', tenant.id));
-      if (!error) {
-        setSaving(false);
-        setSaved(true);
-        setError(
-          'Tudo salvo, menos a logo do modo escuro e a tela de entrada: falta rodar as migrações 007 e 008 no banco.',
-        );
-        router.refresh();
-        return;
-      }
-    }
+    const r = await fetch(`/api/tenants/${tenant.id}/branding`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(update),
+    }).catch(() => null);
+    const body = (await r?.json().catch(() => ({}))) as { error?: string; parcial?: boolean } | undefined;
 
     setSaving(false);
-    if (error) {
-      setError(error.message);
+    if (!r) return setError('Não conseguimos falar com o servidor.');
+    if (!r.ok) return setError(body?.error ?? 'Não foi possível salvar.');
+
+    // Banco ainda sem as migrações 007/008: o servidor salvou o resto.
+    if (body?.parcial) {
+      setSaved(true);
+      setError(
+        'Tudo salvo, menos a logo do modo escuro e a tela de entrada: falta rodar as migrações 007 e 008 no banco.',
+      );
+      router.refresh();
       return;
     }
     setSaved(true);

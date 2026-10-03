@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type { Browser } from 'puppeteer-core';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { launchBrowser } from '@/lib/screenshot/browser';
 import { createStoreShotToken } from '@/lib/tenant/store-token';
 import { PREVIEW_SCREENS, SCREEN_ANCHOR, STORE_SCREEN_ORDER } from '@/lib/tenant/preview-screens';

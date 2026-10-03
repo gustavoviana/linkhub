@@ -1,23 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireTenantApi } from '@/lib/auth/api-guard';
 import { getAdapterForTenant } from '@/lib/erp';
 
 export async function POST(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
 
-  const sb = await createClient();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return new NextResponse('Unauthorized', { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: isAdmin } = await admin
-    .from('tenant_admins')
-    .select('id')
-    .eq('tenant_id', id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-  if (!isAdmin) return new NextResponse('Forbidden', { status: 403 });
+  const auth = await requireTenantApi(id, 'viewer');
+  if (auth.error) return auth.error;
+  const { admin } = auth;
 
   const { data: tenant } = await admin.from('tenants').select('*').eq('id', id).single();
   if (!tenant) return new NextResponse('Tenant not found', { status: 404 });

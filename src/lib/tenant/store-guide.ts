@@ -421,7 +421,7 @@ export function playSteps(c: StoreCopyContext): GuideStep[] {
           tone: 'warning',
           title: 'Nível de API',
           text:
-            'Desde 31/08/2025 a Play exige Android 15 (API 35) e, a partir de 31/08/2026, novos envios precisam de Android 16 (API 36). O gerador do painel acompanha; se um envio for recusado por isso, é bump de uma linha no Bubblewrap, não retrabalho.',
+            'Desde 31/08/2026 a Play exige Android 16 (API 36) em todo envio. O pacote gerado pelo painel já sai com API 36. Se a Play recusar um .aab antigo por "API de destino", gere o pacote de novo: a versão sobe sozinha e a chave de upload continua a mesma.',
         },
         {
           kind: 'links',

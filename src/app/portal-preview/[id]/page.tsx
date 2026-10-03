@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
 import { buildPreviewData } from '@/lib/tenant/preview-data';

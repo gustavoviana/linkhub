@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { getTenantApp, listBuilds } from '@/lib/tenant/app-store-db';
 import { appDefaults, tenantOrigin } from '@/lib/tenant/app-config';
 import { MigrationNotice } from './migration-notice';

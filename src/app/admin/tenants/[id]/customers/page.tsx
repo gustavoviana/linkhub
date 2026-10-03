@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asCustomers } from '@/lib/supabase/helpers';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { Card, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
 import { maskCpfCnpj, maskPhone, titleCaseName } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';

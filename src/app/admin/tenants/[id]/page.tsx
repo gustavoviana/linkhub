@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
-import { requireTenantAdmin } from '@/lib/auth/session';
+import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { Icon, type IconName } from '@/components/portal/icons';
 import { CopyLink } from './copy-link';
 import { AdminScreen } from '@/components/admin/page-header';

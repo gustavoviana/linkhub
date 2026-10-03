@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireTenantApi } from '@/lib/auth/api-guard';
 
 // Configurações gerais do provedor. Passa pelo servidor porque mexe em como
 // o cliente final entra na central — não é coisa para o navegador gravar
@@ -16,22 +15,9 @@ const BODY = z.object({
 export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new NextResponse('Unauthorized', { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: membership } = await admin
-    .from('tenant_admins')
-    .select('role')
-    .eq('tenant_id', id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  const role = (membership as { role?: string } | null)?.role;
-  if (role !== 'owner' && role !== 'admin') {
-    return new NextResponse('Forbidden', { status: 403 });
-  }
+  const auth = await requireTenantApi(id, 'admin');
+  if (auth.error) return auth.error;
+  const { admin } = auth;
 
   const parsed = BODY.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
@@ -53,7 +39,7 @@ export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   await admin.from('audit_log').insert({
     tenant_id: id,
-    actor_user_id: user.id,
+    actor_user_id: auth.userId,
     action: 'tenant.settings_updated',
     resource_type: 'tenant',
     resource_id: id,

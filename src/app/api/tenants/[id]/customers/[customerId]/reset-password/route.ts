@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'node:crypto';
-import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/supabase/admin';
+import { requireTenantApi } from '@/lib/auth/api-guard';
 
 // Redefinição de senha do cliente final, feita pelo provedor.
 //
@@ -23,22 +22,9 @@ export async function POST(
 ) {
   const { id, customerId } = await ctx.params;
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return new NextResponse('Unauthorized', { status: 401 });
-
-  const admin = createAdminClient();
-  const { data: membership } = await admin
-    .from('tenant_admins')
-    .select('role')
-    .eq('tenant_id', id)
-    .eq('user_id', user.id)
-    .maybeSingle();
-
-  const role = (membership as { role?: string } | null)?.role;
-  if (role !== 'owner' && role !== 'admin' && role !== 'support') {
-    return new NextResponse('Forbidden', { status: 403 });
-  }
+  const auth = await requireTenantApi(id, 'support');
+  if (auth.error) return auth.error;
+  const { admin } = auth;
 
   const { data: customer } = await admin
     .from('customers')
@@ -61,11 +47,11 @@ export async function POST(
 
   await admin.from('audit_log').insert({
     tenant_id: id,
-    actor_user_id: user.id,
+    actor_user_id: auth.userId,
     action: 'customer.password_reset',
     resource_type: 'customer',
     resource_id: customerId,
-    metadata: { by: user.email },
+    metadata: { by: auth.email },
   } as never);
 
   return NextResponse.json({ ok: true, password });
