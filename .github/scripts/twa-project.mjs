@@ -78,4 +78,27 @@ if (problem) {
 }
 
 await new TwaGenerator().createTwaProject(out, twaManifest, new ConsoleLog('twa'));
-console.log(`Projeto pronto em ${out} — ${manifest.packageId} ${manifest.appVersion}`);
+
+// API de destino exigida pela Play para envio novo e atualização. Quem
+// define é o template do Bubblewrap — a 1.24.1 ainda saía com 35, e a Play
+// recusou o pacote só no envio, depois de a ficha inteira estar preenchida.
+// Conferir aqui faz o build falhar no runner, onde custa cinco minutos.
+// Quando a Play subir a exigência, sobe este número e a versão do
+// Bubblewrap no workflow juntos.
+const TARGET_SDK_MINIMO = 36;
+
+const gradle = readFileSync(path.join(out, 'app', 'build.gradle'), 'utf8');
+const lido = (chave) => Number(gradle.match(new RegExp(`${chave}\\s+(\\d+)`))?.[1] ?? 0);
+const target = lido('targetSdkVersion');
+const compile = lido('compileSdkVersion');
+if (target < TARGET_SDK_MINIMO || compile < target) {
+  console.error(
+    `targetSdk ${target} / compileSdk ${compile}: a Play exige targetSdk ${TARGET_SDK_MINIMO}. ` +
+      'Atualize @bubblewrap/core em .github/workflows/android-build.yml.',
+  );
+  process.exit(1);
+}
+
+console.log(
+  `Projeto pronto em ${out} — ${manifest.packageId} ${manifest.appVersion} (targetSdk ${target})`,
+);

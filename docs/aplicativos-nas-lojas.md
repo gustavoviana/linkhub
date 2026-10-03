@@ -146,7 +146,7 @@ processo manual e demorado — vale um backup separado da coluna
 | Item | Situação |
 |---|---|
 | Formato AAB | ✅ o build já gera |
-| `targetSdk` 35 | ✅ (36 vira obrigatório perto de agosto/2026 — é bump no Bubblewrap) |
+| `targetSdk` 36 | ✅ Bubblewrap 1.25.0. O `twa-project.mjs` derruba o build se o template sair abaixo do mínimo — quando a Play subir a exigência, sobe os dois juntos |
 | Ícone 512 e capa 1024×500 | ✅ Marca & visual → "Publicar nas lojas" |
 | Política de privacidade | ⚠️ URL por provedor, ainda manual |
 | Formulário de Segurança de Dados | ⚠️ manual, uma vez por app |
