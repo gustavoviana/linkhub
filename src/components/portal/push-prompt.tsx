@@ -3,9 +3,7 @@
 // Convite para ativar os avisos de fatura.
 //
 // Mesmo formato e mesmo lugar do convite de instalar — e por isso os dois
-// nunca aparecem juntos. Quem está no navegador do celular vê primeiro o de
-// instalar; este só entra depois que o assinante instalou ou dispensou
-// aquele. Dentro do app da Play, onde instalar não faz sentido, é o único.
+// nunca aparecem juntos: quando aquele está na tela, este espera ele sair.
 //
 // "Agora não" guarda a dispensa por 30 dias. Quem negou a permissão no
 // aparelho nunca mais vê o convite: pedir de novo não abre a pergunta, e o
@@ -15,12 +13,13 @@ import { useCallback, useEffect, useState } from 'react';
 import type { Tenant } from '@/lib/supabase/types';
 import { usePortalTokens } from './theme';
 import { Icon } from './icons';
-import { convitePendente, jaEhAplicativo, semAnimacao, vidro } from './install-prompt';
+import { CONVITE_INSTALAR_FECHADO, semAnimacao, vidro } from './install-prompt';
 import { ativarAvisos, estadoDosAvisos } from './push';
 
 const CHAVE_DISPENSA = 'portal.avisos.dispensado';
 const DIAS_DE_ESPERA = 30;
-const ATRASO_MS = 4000;
+/** Um pouco depois do convite de instalar (4s), para saber se ele apareceu. */
+const ATRASO_MS = 5000;
 const DURACAO_MS = 260;
 
 function dispensadoHaPouco(): boolean {
@@ -49,22 +48,36 @@ export function PushPrompt({ tenant, chavePublica }: { tenant: Tenant; chavePubl
 
   useEffect(() => {
     if (dispensadoHaPouco()) return;
-    // No navegador do celular, o convite de instalar tem a vez.
-    const celular = window.matchMedia('(max-width: 1023px)').matches;
-    if (celular && !jaEhAplicativo() && convitePendente()) return;
 
     let cancelado = false;
     let timer = 0;
+    const mostrar = () => {
+      if (cancelado) return;
+      setVisivel(true);
+      window.requestAnimationFrame(() => setAberto(true));
+    };
+    // O convite de instalar, quando aparece, tem a vez: este espera ele sair
+    // da tela. Quando o Chrome não libera a instalação, aquele nunca aparece
+    // — e este não pode ficar esperando por ele.
+    const depoisDoConviteDeInstalar = () => {
+      window.removeEventListener(CONVITE_INSTALAR_FECHADO, depoisDoConviteDeInstalar);
+      timer = window.setTimeout(mostrar, 1200);
+    };
+
     estadoDosAvisos().then((estado) => {
       if (cancelado || estado !== 'inativo') return;
       timer = window.setTimeout(() => {
-        setVisivel(true);
-        window.requestAnimationFrame(() => setAberto(true));
+        if (document.documentElement.dataset.conviteInstalar) {
+          window.addEventListener(CONVITE_INSTALAR_FECHADO, depoisDoConviteDeInstalar);
+        } else {
+          mostrar();
+        }
       }, ATRASO_MS);
     });
     return () => {
       cancelado = true;
       window.clearTimeout(timer);
+      window.removeEventListener(CONVITE_INSTALAR_FECHADO, depoisDoConviteDeInstalar);
     };
   }, []);
 

@@ -27,6 +27,8 @@ const CHAVE_DISPENSA = 'portal.instalar.dispensado';
 const CHAVE_INSTALADO = 'portal.instalar.instalado';
 
 const DIAS_DE_ESPERA = 30;
+/** Evento disparado quando este convite sai da tela. */
+export const CONVITE_INSTALAR_FECHADO = 'portal:convite-instalar-fechado';
 /** Respiro antes de aparecer: o assinante abriu a central para ver a conta,
  *  não para ser convidado a instalar. Deixa ele chegar na tela primeiro. */
 const ATRASO_MS = 4000;
@@ -169,6 +171,21 @@ export function InstallPrompt({ tenant }: { tenant: Tenant }) {
       window.removeEventListener('appinstalled', aoInstalar);
     };
   }, []);
+
+  // Avisa o convite dos avisos de fatura (push-prompt) se este está na tela.
+  // Ele espera a vez só enquanto este aparece de fato — esperar por um
+  // convite que o Chrome nunca liberou deixava a central sem nenhum dos dois.
+  useEffect(() => {
+    const raiz = document.documentElement;
+    if (modo !== 'oculto') {
+      raiz.dataset.conviteInstalar = 'aberto';
+      return;
+    }
+    if (raiz.dataset.conviteInstalar) {
+      delete raiz.dataset.conviteInstalar;
+      window.dispatchEvent(new Event(CONVITE_INSTALAR_FECHADO));
+    }
+  }, [modo]);
 
   const fechar = useCallback((lembrar: boolean) => {
     if (lembrar) grave(CHAVE_DISPENSA, String(Date.now()));
