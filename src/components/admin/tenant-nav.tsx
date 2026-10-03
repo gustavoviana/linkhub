@@ -113,6 +113,7 @@ export function TenantNav({
             <NavGroup>Operação</NavGroup>
             <NavItem href={`/admin/tenants/${current.id}/customers`} icon="user">Clientes</NavItem>
             <NavItem href={`/admin/tenants/${current.id}/plans`} icon="file">Planos</NavItem>
+            <NavItem href={`/admin/tenants/${current.id}/notificacoes`} icon="bell">Notificações</NavItem>
 
             <NavGroup>Conta</NavGroup>
             <NavItem href={`/admin/tenants/${current.id}/team`} icon="shield">Equipe &amp; acessos</NavItem>

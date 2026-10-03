@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { PUSH_COOKIE } from '@/lib/push/text';
 
 // Sair da conta.
 //
@@ -16,7 +18,17 @@ import { createClient } from '@/lib/supabase/server';
 async function sair(req: NextRequest) {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  return NextResponse.redirect(new URL('/', req.url), { status: 303 });
+
+  // O aparelho deixa de receber avisos de quem saiu. Num celular
+  // compartilhado, a fatura de um não pode aparecer na tela do outro.
+  const inscricao = req.cookies.get(PUSH_COOKIE)?.value;
+  if (inscricao && /^[0-9a-f-]{36}$/i.test(inscricao)) {
+    await createAdminClient().from('push_subscriptions').delete().eq('id', inscricao);
+  }
+
+  const res = NextResponse.redirect(new URL('/', req.url), { status: 303 });
+  if (inscricao) res.cookies.delete(PUSH_COOKIE);
+  return res;
 }
 
 export async function POST(req: NextRequest) {

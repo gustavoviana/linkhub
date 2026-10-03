@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { PortalShell } from '@/components/portal/shell';
 import { mensalidadeDeFaturas } from '@/lib/portal/mensalidade';
 import { AccountScreen } from './account-screen';
+import { vapidPublicKey } from '@/lib/push/send';
 import type { Contract, Plan } from '@/lib/supabase/types';
 
 export const dynamic = 'force-dynamic';
@@ -51,6 +52,7 @@ export default async function ContaPage() {
         contract={contract as Contract | null}
         plan={plan as Plan | null}
         mensalidadeCents={mensalidadeCents}
+        chavePush={vapidPublicKey()}
       />
     </PortalShell>
   );

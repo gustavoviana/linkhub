@@ -10,6 +10,8 @@ import { HomeV2 } from '@/components/portal/home-v2';
 import { HomeV3 } from '@/components/portal/home-v3';
 import { WebDashboard } from '@/components/portal/web-dashboard';
 import { InstallPrompt } from '@/components/portal/install-prompt';
+import { PushPrompt } from '@/components/portal/push-prompt';
+import { vapidPublicKey } from '@/lib/push/send';
 import type { Contract, Invoice, Plan, Tenant } from '@/lib/supabase/types';
 import type { ErpAdapter, ErpConnection, ErpUsagePoint } from '@/lib/erp/types';
 
@@ -78,6 +80,7 @@ async function ensurePlanFromContract(
 
 export default async function PortalHome() {
   const { tenant, customer } = await getPortalSession();
+  const chavePush = vapidPublicKey();
   if (!customer) redirect('/login');
 
   const supabase = createAdminClient();
@@ -254,6 +257,9 @@ export default async function PortalHome() {
       <div className="lg:hidden">
         <InstallPrompt tenant={tenant} />
       </div>
+      {/* Convite dos avisos de fatura. Celular e computador: o aviso no
+          navegador do computador também leva o assinante até o Pix. */}
+      {chavePush && <PushPrompt tenant={tenant} chavePublica={chavePush} />}
     </PortalShell>
   );
 }

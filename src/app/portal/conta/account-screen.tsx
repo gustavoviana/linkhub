@@ -9,6 +9,7 @@ import { usePortalTokens } from '@/components/portal/theme';
 import { usePortalRuntime } from '@/components/portal/runtime';
 import { ScreenHeader } from '@/components/portal/shell';
 import { initials } from '@/components/portal/ui';
+import { PushSetting } from '@/components/portal/push-setting';
 
 export function AccountScreen({
   tenant,
@@ -16,6 +17,7 @@ export function AccountScreen({
   contract,
   plan,
   mensalidadeCents,
+  chavePush,
 }: {
   tenant: Tenant;
   customer: Customer;
@@ -23,6 +25,8 @@ export function AccountScreen({
   plan: Plan | null;
   /** Já resolvida no servidor: contrato, plano ou histórico de faturas. */
   mensalidadeCents?: number | null;
+  /** Chave VAPID. Sem ela o envio não está configurado e a opção não aparece. */
+  chavePush?: string | null;
 }) {
   const t = usePortalTokens(tenant);
   const { logoutAction } = usePortalRuntime();
@@ -89,6 +93,12 @@ export function AccountScreen({
         {customer.email && <Line t={t} label="E-mail" value={customer.email} />}
         {customer.phone && <Line t={t} label="Telefone" value={maskPhone(customer.phone)} />}
       </Card>
+
+      {chavePush && (
+        <Card t={t}>
+          <PushSetting t={t} chavePublica={chavePush} />
+        </Card>
+      )}
 
       {address.length > 0 && (
         <Card t={t}>

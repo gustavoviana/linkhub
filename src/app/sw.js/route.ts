@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 
 // Service worker mínimo — e mínimo de propósito.
 //
-// Ele existe por dois motivos: sem um `fetch` registrado o Chrome não
+// Ele existe por três motivos: sem um `fetch` registrado o Chrome não
 // considera a central instalável (e sem isso não há PWA nem app Android),
-// e uma tela de "sem conexão" decente é melhor que o dinossauro.
+// uma tela de "sem conexão" decente é melhor que o dinossauro, e é ele quem
+// recebe e mostra os avisos push do provedor.
 //
 // Não guardamos página nenhuma em cache: a central é renderizada no servidor
 // e é autenticada. Cachear fatura de assinante no aparelho seria mostrar
@@ -37,6 +38,52 @@ self.addEventListener('fetch', (event) => {
       () => new Response(OFFLINE, { headers: { 'Content-Type': 'text/html; charset=utf-8' } }),
     ),
   );
+});
+
+// Avisos do provedor. O texto já vem pronto do servidor; aqui só se desenha.
+// Dentro do app da Play, o Chrome entrega a notificação ao app, que aparece
+// com o nome e o ícone do provedor em vez de "Chrome".
+self.addEventListener('push', (event) => {
+  let m = {};
+  try { m = event.data ? event.data.json() : {}; } catch (e) {}
+  if (!m.title) return;
+  event.waitUntil(
+    self.registration.showNotification(m.title, {
+      body: m.body || '',
+      icon: '/icons/icon-192.png',
+      // Um aviso por tela de destino: o lembrete novo da mesma fatura
+      // substitui o antigo em vez de empilhar.
+      tag: m.url || 'linkhub',
+      renotify: true,
+      data: { url: m.url || '/', d: m.d || null },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const data = event.notification.data || {};
+  const destino = new URL(data.url || '/', self.location.origin).href;
+
+  event.waitUntil((async () => {
+    if (data.d) {
+      fetch('/api/push/click', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ d: data.d }),
+        keepalive: true,
+      }).catch(() => {});
+    }
+    // App já aberto: traz para a frente na tela certa, sem abrir outra cópia.
+    const janelas = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const janela of janelas) {
+      if (new URL(janela.url).origin !== self.location.origin) continue;
+      await janela.focus();
+      if ('navigate' in janela) return janela.navigate(destino);
+      return;
+    }
+    return self.clients.openWindow(destino);
+  })());
 });
 `;
 

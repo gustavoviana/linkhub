@@ -59,7 +59,7 @@ function grave(chave: string, valor: string) {
 }
 
 /** Já está rodando como aplicativo? Vale para o PWA e para o pacote da Play. */
-function jaEhAplicativo(): boolean {
+export function jaEhAplicativo(): boolean {
   if (window.matchMedia('(display-mode: standalone)').matches) return true;
   if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
   const nav = window.navigator as Navigator & { standalone?: boolean };
@@ -73,20 +73,20 @@ function ehIPhone(): boolean {
   return /iPad|iPhone|iPod/.test(ua) || iPadDisfarcado;
 }
 
-function convitePendente(): boolean {
+export function convitePendente(): boolean {
   if (leia(CHAVE_INSTALADO)) return false;
   const quando = Number(leia(CHAVE_DISPENSA));
   if (!Number.isFinite(quando) || quando <= 0) return true;
   return Date.now() - quando > DIAS_DE_ESPERA * 86_400_000;
 }
 
-function semAnimacao(): boolean {
+export function semAnimacao(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
 /** Mesmo vidro da barra de abas logo abaixo — as duas peças flutuam sobre o
  *  mesmo conteúdo e destoariam se uma fosse sólida. */
-function vidro(t: PortalTokens) {
+export function vidro(t: PortalTokens) {
   const hex = t.surfaceSolid.replace('#', '');
   const canal = (i: number) => parseInt(hex.slice(i, i + 2), 16) || 0;
   const [r, g, b] = hex.length >= 6 ? [canal(0), canal(2), canal(4)] : [255, 255, 255];
