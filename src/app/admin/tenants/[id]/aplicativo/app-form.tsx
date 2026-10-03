@@ -423,9 +423,26 @@ export default function AppForm({
           </Card>
 
           <Card>
-            <CardHeader>
-              <CardTitle>Builds</CardTitle>
-              <CardSubtitle>O pacote fica guardado — baixe quando for enviar para a loja</CardSubtitle>
+            {/* O mesmo botão do topo: quem desce até a lista para pegar o
+                pacote procura aqui o "gerar outro" — por exemplo quando a Play
+                recusa um .aab antigo e é preciso uma versão nova. */}
+            <CardHeader className="flex items-start gap-3 flex-wrap">
+              <div className="flex-1 min-w-0">
+                <CardTitle>Builds</CardTitle>
+                <CardSubtitle>O pacote fica guardado — baixe quando for enviar para a loja</CardSubtitle>
+              </div>
+              {builds.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={build}
+                  loading={building}
+                  disabled={Boolean(running)}
+                >
+                  {running ? 'Build em andamento…' : 'Gerar nova versão'}
+                </Button>
+              )}
             </CardHeader>
             <CardBody>
               {builds.length === 0 ? (
