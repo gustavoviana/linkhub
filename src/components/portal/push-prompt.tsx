@@ -14,7 +14,7 @@ import type { Tenant } from '@/lib/supabase/types';
 import { usePortalTokens } from './theme';
 import { Icon } from './icons';
 import { CONVITE_INSTALAR_FECHADO, semAnimacao, vidro } from './install-prompt';
-import { ativarAvisos, estadoDosAvisos } from './push';
+import { DICA_PERMISSAO, ESPERA_DA_DICA_MS, ativarAvisos, estadoDosAvisos, mensagemDeErro } from './push';
 
 const CHAVE_DISPENSA = 'portal.avisos.dispensado';
 const DIAS_DE_ESPERA = 30;
@@ -44,7 +44,8 @@ export function PushPrompt({ tenant, chavePublica }: { tenant: Tenant; chavePubl
   const [visivel, setVisivel] = useState(false);
   const [aberto, setAberto] = useState(false);
   const [ativando, setAtivando] = useState(false);
-  const [erro, setErro] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [esperandoResposta, setEsperandoResposta] = useState(false);
 
   useEffect(() => {
     if (dispensadoHaPouco()) return;
@@ -89,16 +90,21 @@ export function PushPrompt({ tenant, chavePublica }: { tenant: Tenant; chavePubl
 
   const ativar = useCallback(async () => {
     setAtivando(true);
-    setErro(false);
+    setErro(null);
+    const dica = window.setTimeout(() => {
+      if (Notification.permission === 'default') setEsperandoResposta(true);
+    }, ESPERA_DA_DICA_MS);
     try {
       const estado = await ativarAvisos(chavePublica);
-      // Ativou, ou negou na pergunta do aparelho: em ambos o assunto acabou.
-      // Só "fechou a pergunta sem responder" deixa o convite voltar depois.
+      // Ativou ou negou: o assunto acabou. Fechou a pergunta sem responder:
+      // conta como "Agora não" e o convite volta em 30 dias.
       if (estado === 'inativo') dispensar();
       fechar(false);
-    } catch {
-      setErro(true);
+    } catch (e) {
+      setErro(mensagemDeErro(e));
     } finally {
+      window.clearTimeout(dica);
+      setEsperandoResposta(false);
       setAtivando(false);
     }
   }, [chavePublica, fechar]);
@@ -150,9 +156,10 @@ export function PushPrompt({ tenant, chavePublica }: { tenant: Tenant; chavePubl
             Receba um aviso antes da sua fatura vencer
           </div>
           <div style={{ fontSize: 12.5, color: t.text2, lineHeight: 1.45, marginTop: 3 }}>
-            {erro
-              ? 'Não deu para ativar agora. Tente de novo em instantes.'
-              : 'O aviso chega no celular, com o Pix a um toque. Você desliga quando quiser em Conta.'}
+            {erro ??
+              (esperandoResposta
+                ? DICA_PERMISSAO
+                : 'O aviso chega no celular, com o Pix a um toque. Você desliga quando quiser em Conta.')}
           </div>
         </div>
         <button
@@ -199,7 +206,7 @@ export function PushPrompt({ tenant, chavePublica }: { tenant: Tenant; chavePubl
           }}
         >
           <Icon name="bell" size={16} />
-          {ativando ? 'Ativando…' : 'Ativar avisos'}
+          {esperandoResposta ? 'Aguardando sua resposta…' : ativando ? 'Ativando…' : erro ? 'Tentar de novo' : 'Ativar avisos'}
         </button>
         <button
           type="button"

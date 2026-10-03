@@ -6,12 +6,21 @@
 
 import { useEffect, useState } from 'react';
 import type { PortalTokens } from './tokens';
-import { ativarAvisos, desativarAvisos, estadoDosAvisos, type EstadoDosAvisos } from './push';
+import {
+  DICA_PERMISSAO,
+  ESPERA_DA_DICA_MS,
+  ativarAvisos,
+  desativarAvisos,
+  estadoDosAvisos,
+  mensagemDeErro,
+  type EstadoDosAvisos,
+} from './push';
 
 export function PushSetting({ t, chavePublica }: { t: PortalTokens; chavePublica: string }) {
   const [estado, setEstado] = useState<EstadoDosAvisos | null>(null);
   const [ocupado, setOcupado] = useState(false);
-  const [erro, setErro] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [esperandoResposta, setEsperandoResposta] = useState(false);
 
   useEffect(() => {
     estadoDosAvisos().then(setEstado).catch(() => setEstado('indisponivel'));
@@ -24,12 +33,17 @@ export function PushSetting({ t, chavePublica }: { t: PortalTokens; chavePublica
 
   async function alternar() {
     setOcupado(true);
-    setErro(false);
+    setErro(null);
+    const dica = window.setTimeout(() => {
+      if (Notification.permission === 'default') setEsperandoResposta(true);
+    }, ESPERA_DA_DICA_MS);
     try {
       setEstado(ligado ? await desativarAvisos() : await ativarAvisos(chavePublica));
-    } catch {
-      setErro(true);
+    } catch (e) {
+      setErro(mensagemDeErro(e));
     } finally {
+      window.clearTimeout(dica);
+      setEsperandoResposta(false);
       setOcupado(false);
     }
   }
@@ -38,8 +52,10 @@ export function PushSetting({ t, chavePublica }: { t: PortalTokens; chavePublica
     estado === 'negado'
       ? 'Bloqueados nas configurações do aparelho. Libere as notificações deste app para voltar a receber.'
       : erro
-        ? 'Não deu para mudar agora. Tente de novo em instantes.'
-        : ligado
+        ? erro
+        : esperandoResposta
+          ? DICA_PERMISSAO
+          : ligado
           ? 'Você recebe aviso de fatura e recados importantes do provedor.'
           : 'Ative para receber aviso antes da fatura vencer.';
 
