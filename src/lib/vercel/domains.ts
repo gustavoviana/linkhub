@@ -1,5 +1,6 @@
 import 'server-only';
 import { promises as dns } from 'node:dns';
+import { ensureTxtRecord } from '@/lib/cloudflare/dns';
 
 // Cliente da API de domínios da Vercel.
 //
@@ -289,7 +290,27 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus> {
     const apexName = (res.body.apexName as string | undefined) ?? domain;
 
     // Não verificado ainda: pode ser só falta de reconferir o TXT.
-    const verified = res.body.verified === true || (await verifyDomain(domain));
+    let verified = res.body.verified === true || (await verifyDomain(domain));
+
+    // Subdomínio do LinkHub: o TXT vai para a Cloudflare, onde mora o DNS do
+    // domínio raiz, e a Vercel confere de novo na mesma hora. Domínio próprio
+    // de provedor é ignorado lá dentro — o DNS é dele.
+    if (!verified && verification?.length) {
+      const publicados = await Promise.all(
+        verification.filter((v) => v.type === 'TXT').map((v) => ensureTxtRecord(v.domain, v.value)),
+      );
+      if (publicados.length && publicados.every(Boolean)) {
+        // O TXT novo leva alguns segundos para aparecer para quem consulta;
+        // duas tentativas cobrem o caso comum sem segurar a tela.
+        for (const espera of [1500, 4000]) {
+          await new Promise((r) => setTimeout(r, espera));
+          if ((verified = await verifyDomain(domain))) break;
+        }
+        // Posse provada agora: pede o certificado já, em vez de esperar a
+        // emissão automática da Vercel, que às vezes não vem.
+        if (verified) await issueCertificate(domain);
+      }
+    }
 
     if (!verified) {
       return {
