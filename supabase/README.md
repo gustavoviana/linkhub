@@ -23,6 +23,7 @@ Cole o SQL no **SQL Editor** do projeto Supabase, na ordem:
 | `migrations/20260729_006_tenant_apps.sql` | já aplicado (tabela `tenant_apps` existe) |
 | `migrations/20260731_007_logo_dark.sql` | **pendente** — sem ele, a logo do modo escuro não salva |
 | `migrations/20260731_008_login_screen.sql` | **pendente** — sem ele, a imagem e os textos da tela de entrada não salvam |
+| `migrations/20261016_013_tenant_chat.sql` | **pendente** (conferido em 16/10/2026) — sem ele, a tela Chat de atendimento mostra o SQL e o botão não aparece na central |
 
 O estado de cada um foi conferido consultando as colunas em produção, não pela
 data do arquivo.

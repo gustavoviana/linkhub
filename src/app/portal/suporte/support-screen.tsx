@@ -96,8 +96,18 @@ const TOPICS: Topic[] = [
   },
 ];
 
-export function SupportScreen({ tenant, tickets }: { tenant: Tenant; tickets: SupportTicket[] }) {
+export function SupportScreen({
+  tenant,
+  tickets,
+  chat = false,
+}: {
+  tenant: Tenant;
+  tickets: SupportTicket[];
+  /** O provedor ligou o chat de atendimento (tenant_chat) no painel. */
+  chat?: boolean;
+}) {
   const t = usePortalTokens(tenant);
+  const chatAtendimento = useChat();
 
   const wa = (text: string) =>
     tenant.support_whatsapp
@@ -108,11 +118,15 @@ export function SupportScreen({ tenant, tickets }: { tenant: Tenant; tickets: Su
           ? `tel:${tenant.support_phone.replace(/\D/g, '')}`
           : null;
 
-  const hasChannel = !!(tenant.support_whatsapp || tenant.support_phone || tenant.support_email);
+  const hasChannel = !!(chat || tenant.support_whatsapp || tenant.support_phone || tenant.support_email);
 
   // O botão no fim de cada resposta chama o canal pelo nome: "falar no
   // WhatsApp" é clique certo, "falar com o suporte" é dúvida sobre o que abre.
-  const channelLabel = tenant.support_whatsapp
+  // Com o chat ligado, é ele que fecha cada resposta: o cliente cai no
+  // atendimento já identificado e a mensagem não depende de outro aplicativo.
+  const channelLabel = chat
+    ? 'Falar no chat'
+    : tenant.support_whatsapp
     ? 'Falar no WhatsApp'
     : tenant.support_email
       ? 'Falar por e-mail'
@@ -126,6 +140,8 @@ export function SupportScreen({ tenant, tickets }: { tenant: Tenant; tickets: Su
       <p style={{ padding: '0 20px', fontSize: 13, color: t.text2, marginTop: -4, marginBottom: 18 }}>
         Como podemos te ajudar hoje?
       </p>
+
+      {chat && <ChatCard t={t} chat={chatAtendimento} />}
 
       <section style={{ padding: '0 20px', marginBottom: 20 }}>
         <div
@@ -146,7 +162,10 @@ export function SupportScreen({ tenant, tickets }: { tenant: Tenant; tickets: Su
               key={topic.title}
               t={t}
               topic={topic}
-              href={wa(topic.message)}
+              href={chat ? null : wa(topic.message)}
+              onChat={chat ? chatAtendimento.abrir : undefined}
+              chatBusy={chatAtendimento.abrindo}
+              chatError={chatAtendimento.erro}
               channelLabel={channelLabel}
             />
           ))}
@@ -212,14 +231,24 @@ function TopicCard({
   t,
   topic,
   href,
+  onChat,
+  chatBusy,
+  chatError,
   channelLabel,
 }: {
   t: PortalTokens;
   topic: Topic;
   href: string | null;
+  /** Chat ligado: o botão do fim pede o link em vez de seguir um href. */
+  onChat?: () => void;
+  chatBusy?: boolean;
+  chatError?: string | null;
   channelLabel: string | null;
 }) {
   const [open, setOpen] = useState(false);
+  // O erro do chat é um só para a tela inteira; aqui ele só aparece no
+  // assunto em que o cliente tocou, e não em todos os que estiverem abertos.
+  const [pediuChat, setPediuChat] = useState(false);
 
   return (
     <div
@@ -333,11 +362,13 @@ function TopicCard({
             <p style={{ fontSize: 13, lineHeight: 1.6, color: t.text2, margin: 0 }}>{topic.outro}</p>
           )}
 
-          {href && channelLabel && (
+          {channelLabel && (onChat || href) && (
             <a
-              href={href}
-              target="_blank"
+              href={onChat ? undefined : href ?? undefined}
+              target={onChat ? undefined : '_blank'}
               rel="noreferrer"
+              role={onChat ? 'button' : undefined}
+              onClick={onChat ? (e) => { e.preventDefault(); if (!chatBusy) { setPediuChat(true); onChat(); } } : undefined}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -350,11 +381,18 @@ function TopicCard({
                 fontSize: 13,
                 fontWeight: 700,
                 marginTop: 2,
+                cursor: chatBusy ? 'progress' : 'pointer',
               }}
             >
-              {channelLabel}
-              <Icon name="arrow-right" size={15} />
+              {chatBusy ? 'Abrindo o chat…' : channelLabel}
+              <Icon name={onChat ? 'chat' : 'arrow-right'} size={15} />
             </a>
+          )}
+
+          {onChat && pediuChat && chatError && (
+            <div role="alert" style={{ fontSize: 12, lineHeight: 1.5, color: t.danger }}>
+              {chatError}
+            </div>
           )}
         </div>
       )}
@@ -626,5 +664,113 @@ function Channel({
       </div>
       <Icon name="arrow-right" size={16} />
     </a>
+  );
+}
+
+/**
+ * Pede ao servidor o link pessoal do chat e abre.
+ *
+ * Na mesma janela, e não num iframe nem em aba nova: o atendimento recusa ser
+ * embutido (X-Frame-Options), e aba aberta depois de um fetch é bloqueada como
+ * pop-up. No app Android, endereço fora da central abre numa aba por cima, e o
+ * voltar devolve o cliente para cá.
+ */
+function useChat() {
+  const { demo } = usePortalRuntime();
+  const [abrindo, setAbrindo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function abrir() {
+    setErro(null);
+    if (demo) {
+      setErro('Na demonstração o chat não abre. Na central do provedor, o cliente entra no atendimento já identificado.');
+      return;
+    }
+    setAbrindo(true);
+    const r = await fetch('/api/portal/chat', { method: 'POST' }).catch(() => null);
+    if (!r) {
+      setAbrindo(false);
+      return setErro('Não conseguimos falar com o servidor. Confira sua conexão.');
+    }
+    if (!r.ok) {
+      setAbrindo(false);
+      return setErro((await r.text()) || 'Não conseguimos abrir o chat agora.');
+    }
+    const { url } = (await r.json()) as { url: string };
+    // `abrindo` fica ligado: a página está saindo, e o botão não pode
+    // aceitar um segundo toque que geraria outro link.
+    window.location.assign(url);
+    // Quem volta pelo botão do navegador recebe esta página do cache, com o
+    // estado congelado em "Abrindo…". Ao reaparecer, o botão se solta.
+    window.addEventListener('pageshow', () => setAbrindo(false), { once: true });
+  }
+
+  return { abrir, abrindo, erro };
+}
+
+function ChatCard({ t, chat }: { t: PortalTokens; chat: ReturnType<typeof useChat> }) {
+  return (
+    <section style={{ padding: '0 20px', marginBottom: 20 }}>
+      <button
+        type="button"
+        onClick={chat.abrir}
+        disabled={chat.abrindo}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          width: '100%',
+          padding: 16,
+          borderRadius: t.radiusSm,
+          background: t.accentGrad,
+          color: t.accentFg,
+          border: 'none',
+          textAlign: 'left',
+          cursor: chat.abrindo ? 'progress' : 'pointer',
+          fontFamily: 'inherit',
+          boxShadow: `0 10px 24px -12px ${t.accent}`,
+        }}
+      >
+        <span
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            background: 'rgba(255,255,255,0.18)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="chat" size={20} />
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 15, fontWeight: 700 }}>
+            {chat.abrindo ? 'Abrindo o chat…' : 'Falar no chat'}
+          </span>
+          <span style={{ display: 'block', fontSize: 12, opacity: 0.88, marginTop: 2, fontWeight: 500 }}>
+            Atendimento por aqui, você já entra identificado
+          </span>
+        </span>
+        <Icon name="arrow-right" size={17} />
+      </button>
+      {chat.erro && (
+        <div
+          role="alert"
+          style={{
+            marginTop: 8,
+            padding: 12,
+            borderRadius: t.radiusSm,
+            background: rgba(t.danger, 0.1),
+            border: `1px solid ${rgba(t.danger, 0.25)}`,
+            fontSize: 13,
+            color: t.text,
+          }}
+        >
+          {chat.erro}
+        </div>
+      )}
+    </section>
   );
 }

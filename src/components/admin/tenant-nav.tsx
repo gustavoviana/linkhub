@@ -109,6 +109,7 @@ export function TenantNav({
             <NavItem href={`/admin/tenants/${current.id}/branding`} icon="flash">Marca &amp; visual</NavItem>
             <NavItem href={`/admin/tenants/${current.id}/aplicativo`} icon="phone">Aplicativo</NavItem>
             <NavItem href={`/admin/tenants/${current.id}/dominio`} icon="globe">Domínio</NavItem>
+            <NavItem href={`/admin/tenants/${current.id}/atendimento`} icon="chat">Chat de atendimento</NavItem>
 
             <NavGroup>Operação</NavGroup>
             <NavItem href={`/admin/tenants/${current.id}/customers`} icon="user">Clientes</NavItem>
