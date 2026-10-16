@@ -12,10 +12,15 @@ import { ThemeToggle, usePortalTokens } from './theme';
 import { BrandMark, PortalScreenProps, invoiceStanding } from './ui';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
+import { ChatErro, useChat, useChatAtivo } from './chat';
 
 export function HomeV3(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = usePortalTokens(tenant);
+  // O chat entra logo depois da 2ª via: são as duas coisas que mais trazem o
+  // assinante até aqui. Só existe quando o provedor ligou no painel.
+  const chatLigado = useChatAtivo();
+  const chat = useChat();
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
@@ -153,10 +158,16 @@ export function HomeV3(props: PortalScreenProps) {
 
         <div style={{ padding: '0 18px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
           <Tile t={t} href="/fatura" icon="barcode" title="2ª via" desc="Baixe seu boleto" />
+          {chatLigado && (
+            <Tile t={t} onClick={chat.abrir} icon="chat" title={chat.abrindo ? 'Abrindo…' : 'Chat'} desc="Fale com a gente agora" />
+          )}
           <Tile t={t} href="/suporte" icon="help" title="Suporte" desc="Tire suas dúvidas" />
           <Tile t={t} href="/conta" icon="settings" title="Meu plano" desc={plan ? `${plan.down_mbps ?? '—'} / ${plan.up_mbps ?? '—'} Mbps` : 'Ver detalhes'} />
-          <Tile t={t} href="/suporte" icon="lock" title="Senha Wi-Fi" desc="Trocar agora" />
+          {/* Com o chat são cinco: a última ocupa a linha inteira em vez de
+              deixar um buraco ao lado. */}
+          <Tile t={t} href="/suporte" icon="lock" title="Senha Wi-Fi" desc="Trocar agora" wide={chatLigado} />
         </div>
+        <ChatErro t={t} erro={chat.erro} />
 
         {contract && (
           <div
@@ -277,28 +288,33 @@ export function HomeV3(props: PortalScreenProps) {
 function Tile({
   t,
   href,
+  onClick,
   icon,
   title,
   desc,
+  wide,
 }: {
   t: PortalTokens;
-  href: string;
+  /** Atalho de tela; ou `onClick`, para ação (o chat não é uma rota). */
+  href?: string;
+  onClick?: () => void;
   icon: IconName;
   title: string;
   desc: string;
+  /** Ocupa as duas colunas da grade. */
+  wide?: boolean;
 }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        padding: 16,
-        background: t.surface2,
-        borderRadius: 22,
-        minHeight: 110,
-        display: 'block',
-        color: t.text,
-      }}
-    >
+  const style: React.CSSProperties = {
+    padding: 16,
+    background: t.surface2,
+    borderRadius: 22,
+    minHeight: 110,
+    display: 'block',
+    color: t.text,
+    gridColumn: wide ? '1 / -1' : undefined,
+  };
+  const conteudo = (
+    <>
       <div
         style={{
           width: 44,
@@ -316,6 +332,22 @@ function Tile({
       </div>
       <div style={{ marginTop: 12, fontSize: 14, fontWeight: 800 }}>{title}</div>
       <div style={{ fontSize: 11, color: t.text2, marginTop: 2 }}>{desc}</div>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        style={{ ...style, border: 'none', textAlign: 'left', width: '100%', cursor: 'pointer', fontFamily: 'inherit' }}
+      >
+        {conteudo}
+      </button>
+    );
+  }
+  return (
+    <Link href={href ?? '/'} style={style}>
+      {conteudo}
     </Link>
   );
 }

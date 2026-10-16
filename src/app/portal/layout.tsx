@@ -5,6 +5,8 @@ import { getCurrentTenant } from '@/lib/tenant/resolve';
 import { PortalThemeProvider } from '@/components/portal/theme';
 import { RegisterSW } from '@/components/portal/register-sw';
 import { PORTAL_THEME_COOKIE, resolveDark } from '@/lib/portal/theme-cookie';
+import { chatAtivo } from '@/lib/chat/config';
+import { ChatProvider } from '@/components/portal/chat';
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
   const tenant = await getCurrentTenant();
@@ -12,12 +14,12 @@ export default async function PortalLayout({ children }: { children: React.React
 
   // O tema vem do cookie já no servidor: assim a primeira pintura sai certa,
   // sem o flash de claro→escuro que uma leitura de localStorage causaria.
-  const store = await cookies();
+  const [store, chat] = await Promise.all([cookies(), chatAtivo(tenant.id)]);
   const dark = resolveDark(store.get(PORTAL_THEME_COOKIE)?.value, tenant);
 
   return (
     <PortalThemeProvider tenant={tenant} initialDark={dark}>
-      {children}
+      <ChatProvider ativo={chat}>{children}</ChatProvider>
       <RegisterSW />
     </PortalThemeProvider>
   );

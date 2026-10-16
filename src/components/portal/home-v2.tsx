@@ -12,6 +12,7 @@ import { BrandMark, PortalScreenProps, invoiceStanding } from './ui';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
 import { NoOpenInvoice } from './home-v1';
+import { ChatErro, useChat, useChatAtivo } from './chat';
 
 function glass(t: PortalTokens) {
   return {
@@ -25,6 +26,10 @@ function glass(t: PortalTokens) {
 export function HomeV2(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = usePortalTokens(tenant);
+  // O chat entra logo depois da 2ª via: são as duas coisas que mais trazem o
+  // assinante até aqui. Só existe quando o provedor ligou no painel.
+  const chatLigado = useChatAtivo();
+  const chat = useChat();
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
@@ -145,11 +150,13 @@ export function HomeV2(props: PortalScreenProps) {
 
         <div style={{ display: 'flex', gap: 10, padding: '0 18px 16px', overflowX: 'auto' }} className="scrollbar-hide">
           <Quick t={t} href="/fatura" icon="barcode" label="2ª via" />
+          {chatLigado && <Quick t={t} onClick={chat.abrir} icon="chat" label={chat.abrindo ? 'Abrindo…' : 'Chat'} />}
           <Quick t={t} href="/conta" icon="speed" label="Velocidade" />
           <Quick t={t} href="/suporte" icon="help" label="Suporte" />
           <Quick t={t} href="/conta" icon="settings" label="Plano" />
           <Quick t={t} href="/suporte" icon="shield" label="Wi-Fi" />
         </div>
+        <ChatErro t={t} erro={chat.erro} />
 
         {contract && (
           <div style={{ margin: '0 18px 14px', padding: 18, borderRadius: 20, ...glass(t) }}>
@@ -235,21 +242,32 @@ export function HomeV2(props: PortalScreenProps) {
 }
 
 
-function Quick({ t, href, icon, label }: { t: PortalTokens; href: string; icon: IconName; label: string }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        minWidth: 96,
-        padding: '14px 10px',
-        borderRadius: 18,
-        ...glass(t),
-        border: `1px solid ${t.borderSoft}`,
-        textAlign: 'center',
-        color: t.text,
-        flexShrink: 0,
-      }}
-    >
+function Quick({
+  t,
+  href,
+  onClick,
+  icon,
+  label,
+}: {
+  t: PortalTokens;
+  /** Atalho de tela; ou `onClick`, para ação (o chat não é uma rota). */
+  href?: string;
+  onClick?: () => void;
+  icon: IconName;
+  label: string;
+}) {
+  const style: React.CSSProperties = {
+    minWidth: 96,
+    padding: '14px 10px',
+    borderRadius: 18,
+    ...glass(t),
+    border: `1px solid ${t.borderSoft}`,
+    textAlign: 'center',
+    color: t.text,
+    flexShrink: 0,
+  };
+  const conteudo = (
+    <>
       <div
         style={{
           width: 38,
@@ -267,6 +285,18 @@ function Quick({ t, href, icon, label }: { t: PortalTokens; href: string; icon: 
         <Icon name={icon} size={18} />
       </div>
       <div style={{ fontSize: 11, marginTop: 8, fontWeight: 600 }}>{label}</div>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} style={{ ...style, cursor: 'pointer', fontFamily: 'inherit' }}>
+        {conteudo}
+      </button>
+    );
+  }
+  return (
+    <Link href={href ?? '/'} style={style}>
+      {conteudo}
     </Link>
   );
 }

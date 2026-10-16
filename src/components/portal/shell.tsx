@@ -12,6 +12,7 @@ import { Icon, type IconName } from './icons';
 import { portalTokens, type PortalTokens } from './tokens';
 import { ThemeToggle, usePortalTokens } from './theme';
 import { BrandMark, TabBar, initials } from './ui';
+import { ChatErro, useChat, useChatAtivo } from './chat';
 
 const NAV: { href: string; label: string; icon: IconName; match: (p: string) => boolean }[] = [
   { href: '/', label: 'Visão geral', icon: 'home', match: (p) => p === '/' || p === '/portal' },
@@ -31,6 +32,8 @@ export function PortalSidebar({
 }) {
   const pathname = usePortalPath();
   const { logoutAction } = usePortalRuntime();
+  const chatLigado = useChatAtivo();
+  const chat = useChat();
 
   return (
     <aside
@@ -90,7 +93,50 @@ export function PortalSidebar({
             </Link>
           );
         })}
+        {/* Não é rota: o toque pede o link pessoal e abre o atendimento. Fica
+            no menu porque é o que o cliente procura em qualquer tela. */}
+        {chatLigado && (
+          <button
+            type="button"
+            onClick={chat.abrir}
+            disabled={chat.abrindo}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              padding: '10px 14px',
+              borderRadius: 10,
+              background: 'transparent',
+              border: 'none',
+              color: t.text2,
+              fontSize: 13,
+              fontWeight: 500,
+              fontFamily: 'inherit',
+              textAlign: 'left',
+              cursor: chat.abrindo ? 'progress' : 'pointer',
+              width: '100%',
+            }}
+          >
+            <Icon name="chat" size={17} />
+            <span style={{ flex: 1 }}>{chat.abrindo ? 'Abrindo…' : 'Chat'}</span>
+            <span
+              style={{
+                fontSize: 9.5,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                textTransform: 'uppercase',
+                padding: '2px 7px',
+                borderRadius: 999,
+                background: t.accentSoft,
+                color: t.accent,
+              }}
+            >
+              online
+            </span>
+          </button>
+        )}
       </nav>
+      <ChatErro t={t} erro={chat.erro} />
 
       <div style={{ marginTop: 'auto', padding: 12, borderRadius: 12, background: t.surface2, border: `1px solid ${t.border}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

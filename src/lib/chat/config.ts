@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { open } from '@/lib/tenant/secret-box';
 
@@ -64,16 +65,16 @@ export async function estadoDoChat(tenantId: string): Promise<EstadoDoChat> {
  *
  * Nunca derruba a tela de suporte: banco sem a migração ou erro de leitura
  * só escondem o botão — o assinante continua com WhatsApp, telefone e
- * chamado.
+ * chamado. Em cache por requisição: o layout e a página perguntam juntos.
  */
-export async function chatAtivo(tenantId: string): Promise<boolean> {
+export const chatAtivo = cache(async (tenantId: string): Promise<boolean> => {
   try {
     const { linha } = await lerLinha(tenantId);
     return !!linha?.enabled;
   } catch {
     return false;
   }
-}
+});
 
 /** Token aberto, só quando o chat está ligado. Uso exclusivo do servidor. */
 export async function tokenDoChat(tenantId: string): Promise<string | null> {

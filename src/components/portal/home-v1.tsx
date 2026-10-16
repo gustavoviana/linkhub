@@ -11,10 +11,15 @@ import { ThemeToggle, usePortalTokens } from './theme';
 import { BrandMark, PortalScreenProps, initials, invoiceStanding } from './ui';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
+import { ChatErro, useChat, useChatAtivo } from './chat';
 
 export function HomeV1(props: PortalScreenProps) {
   const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
   const t = usePortalTokens(tenant);
+  // O chat entra logo depois da 2ª via: são as duas coisas que mais trazem o
+  // assinante até aqui. Só existe quando o provedor ligou no painel.
+  const chatLigado = useChatAtivo();
+  const chat = useChat();
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   return (
@@ -115,12 +120,16 @@ export function HomeV1(props: PortalScreenProps) {
           <NoOpenInvoice t={t} aguardando={props.aguardandoFaturas} />
         )}
 
-        <div style={{ padding: '0 20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
+        <div style={{ padding: '0 20px', display: 'grid', gridTemplateColumns: `repeat(${chatLigado ? 5 : 4}, 1fr)`, gap: 8, marginBottom: 16 }}>
           <Shortcut t={t} href="/fatura" icon="barcode" label="2ª via" />
+          {chatLigado && (
+            <Shortcut t={t} onClick={chat.abrir} icon="chat" label={chat.abrindo ? 'Abrindo…' : 'Chat'} />
+          )}
           <Shortcut t={t} href="/conta" icon="speed" label="Velocidade" />
           <Shortcut t={t} href="/suporte" icon="help" label="Suporte" />
           <Shortcut t={t} href="/conta" icon="settings" label="Plano" />
         </div>
+        <ChatErro t={t} erro={chat.erro} />
 
         {(connection || contract) && (
           <div style={{ margin: '0 20px 14px' }}>
@@ -206,26 +215,27 @@ export function HomeV1(props: PortalScreenProps) {
 function Shortcut({
   t,
   href,
+  onClick,
   icon,
   label,
 }: {
   t: ReturnType<typeof portalTokens>;
-  href: string;
-  icon: 'barcode' | 'speed' | 'help' | 'settings';
+  /** Atalho de tela; ou `onClick`, para ação (o chat não é uma rota). */
+  href?: string;
+  onClick?: () => void;
+  icon: 'barcode' | 'speed' | 'help' | 'settings' | 'chat';
   label: string;
 }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        background: t.surface,
-        border: `1px solid ${t.border}`,
-        borderRadius: 14,
-        padding: '12px 4px 10px',
-        textAlign: 'center',
-        display: 'block',
-      }}
-    >
+  const style: React.CSSProperties = {
+    background: t.surface,
+    border: `1px solid ${t.border}`,
+    borderRadius: 14,
+    padding: '12px 4px 10px',
+    textAlign: 'center',
+    display: 'block',
+  };
+  const conteudo = (
+    <>
       <div
         style={{
           width: 36,
@@ -242,6 +252,18 @@ function Shortcut({
         <Icon name={icon} size={17} />
       </div>
       <div style={{ fontSize: 11, marginTop: 7, fontWeight: 500, color: t.text }}>{label}</div>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} style={{ ...style, width: '100%', cursor: 'pointer', fontFamily: 'inherit' }}>
+        {conteudo}
+      </button>
+    );
+  }
+  return (
+    <Link href={href ?? '/'} style={style}>
+      {conteudo}
     </Link>
   );
 }
