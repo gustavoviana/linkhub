@@ -12,10 +12,12 @@ import { ThemeToggle, usePortalTokens } from './theme';
 import { NetChart, usageToSeries } from './net-chart';
 import { ConnectionCard } from './connection-card';
 import { PortalScreenProps, invoiceStanding } from './ui';
+import { useChat } from './chat';
 
 export function WebDashboard(props: PortalScreenProps) {
-  const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage } = props;
+  const { tenant, customer, contract, plan, openInvoice, recentInvoices, connection, usage, chat } = props;
   const t = usePortalTokens(tenant);
+  const atendimento = useChat();
   const firstName = titleCaseName(customer.name.split(' ')[0]);
 
   const kpis: {
@@ -278,6 +280,30 @@ export function WebDashboard(props: PortalScreenProps) {
             Fale com o {tenant.name} pelos canais oficiais e acompanhe suas solicitações por aqui.
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+            {/* O chat vem primeiro: o cliente entra identificado e a conversa
+                não depende de outro aplicativo aberto no computador. */}
+            {chat && (
+              <button
+                type="button"
+                onClick={atendimento.abrir}
+                disabled={atendimento.abrindo}
+                style={{
+                  ...channelBtn(t),
+                  background: t.accentGrad,
+                  color: t.accentFg,
+                  border: 'none',
+                  cursor: atendimento.abrindo ? 'progress' : 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <Icon name="chat" size={15} /> {atendimento.abrindo ? 'Abrindo o chat…' : 'Falar no chat'}
+              </button>
+            )}
+            {chat && atendimento.erro && (
+              <div role="alert" style={{ fontSize: 11.5, lineHeight: 1.5, color: t.danger }}>
+                {atendimento.erro}
+              </div>
+            )}
             {tenant.support_whatsapp && (
               <a
                 href={`https://wa.me/${tenant.support_whatsapp}`}

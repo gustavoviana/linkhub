@@ -12,6 +12,7 @@ import { WebDashboard } from '@/components/portal/web-dashboard';
 import { InstallPrompt } from '@/components/portal/install-prompt';
 import { PushPrompt } from '@/components/portal/push-prompt';
 import { vapidPublicKey } from '@/lib/push/send';
+import { chatAtivo } from '@/lib/chat/config';
 import type { Contract, Invoice, Plan, Tenant } from '@/lib/supabase/types';
 import type { ErpAdapter, ErpConnection, ErpUsagePoint } from '@/lib/erp/types';
 
@@ -85,6 +86,8 @@ export default async function PortalHome() {
 
   const supabase = createAdminClient();
   const adapter = getAdapterForTenant(tenant);
+  // Sai já, em paralelo com o resto: só decide se o botão do chat aparece.
+  const chatDoProvedor = chatAtivo(tenant.id);
 
   // 1. Contratos: tenta DB primeiro, cai pro ERP se não tiver.
   // O plano vem junto no mesmo pedido (`plans(*)`): buscar depois, pelo
@@ -224,7 +227,7 @@ export default async function PortalHome() {
     aguardandoFaturas = !abertas.length && !pagas.length && !contract.last_synced_at;
   }
 
-  const { connection, usage } = await aoVivo;
+  const [{ connection, usage }, chat] = await Promise.all([aoVivo, chatDoProvedor]);
 
   const props = {
     tenant,
@@ -236,6 +239,7 @@ export default async function PortalHome() {
     connection,
     usage,
     aguardandoFaturas,
+    chat,
   };
 
   const Home = tenant.layout === 'v2' ? HomeV2 : tenant.layout === 'v3' ? HomeV3 : HomeV1;

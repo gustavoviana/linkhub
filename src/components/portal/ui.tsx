@@ -22,6 +22,8 @@ export interface PortalScreenProps {
    * vencida — não sabíamos de nada e afirmávamos o melhor caso.
    */
   aguardandoFaturas?: boolean;
+  /** O provedor ligou o chat de atendimento no painel (tenant_chat). */
+  chat?: boolean;
 }
 
 /** "vencida em 10/07" / "vence em 4 dias" — sempre com a data original. */
