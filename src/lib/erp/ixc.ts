@@ -388,6 +388,32 @@ export class IxcAdapter implements ErpAdapter {
     }
     if (!cliente) return checks;
 
+    // Senha da central: só o formato, nunca o valor. É o que separa "senha
+    // errada" de "o IXC guarda num formato que não sabemos conferir".
+    {
+      const guardada = String(cliente.senha ?? '').trim();
+      const formato = !guardada
+        ? 'vazia'
+        : /^[a-f0-9]{32}$/i.test(guardada)
+          ? 'MD5 (32 hex)'
+          : /^[a-f0-9]{40}$/i.test(guardada)
+            ? 'SHA-1 (40 hex)'
+            : /^[a-f0-9]{64}$/i.test(guardada)
+              ? 'SHA-256 (64 hex)'
+              : /^\$2[aby]\$/.test(guardada)
+                ? 'bcrypt'
+                : `texto (${guardada.length} caracteres)`;
+      const camposSenha = Object.keys(cliente).filter((k) => /senha|hotsite/i.test(k));
+      checks.push({
+        resource: 'cliente.senha',
+        feature: 'Senha da central do cliente',
+        status: guardada ? 'ok' : 'vazio',
+        detail:
+          `Formato guardado: ${formato}. senha_hotsite_md5: ${cliente.senha_hotsite_md5 ?? '(ausente)'}. ` +
+          `Campos de senha no cadastro: ${camposSenha.join(', ') || 'nenhum'}.`,
+      });
+    }
+
     const contratos = await sondar(
       'cliente_contrato', 'cliente_contrato.id_cliente', 'Contratos deste assinante',
       { qtype: 'cliente_contrato.id_cliente', query: String(cliente.id), oper: '=', page: '1', rp: '50' },
