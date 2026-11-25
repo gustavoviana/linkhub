@@ -448,7 +448,31 @@ export class IxcAdapter implements ErpAdapter {
         });
       }
     }
-    if (!loginDoAssinante) return checks;
+    if (!loginDoAssinante) {
+      // Sem login a central ainda tenta o consumo pelo cliente, se ele tiver um
+      // contrato só em operação. O diagnóstico percorre o mesmo caminho para
+      // dizer se ele está aberto, em vez de parar aqui sem resposta.
+      const unico = await this.temContratoUnico(String(cliente.id)).catch(() => false);
+      const { registros: porCli, usado, tentativas } = await this.buscarContabilidade(
+        undefined,
+        String(cliente.id),
+      );
+      checks.push({
+        resource: usado ?? 'radacct / radpop_radaccounting (por cliente)',
+        feature: 'Consumo pelo cliente, sem login',
+        status: porCli.length && unico ? 'ok' : 'vazio',
+        records: porCli.length,
+        detail:
+          (porCli.length
+            ? `Respondeu por "${usado}".`
+            : `Nenhuma tabela respondeu pelo cliente. Tentativas: ${tentativas.join('; ')}.`) +
+          (unico
+            ? ''
+            : ' O cliente tem mais de um contrato em operação: sem o login, a central não ' +
+              'separa o consumo de cada um e deixa o gráfico vazio.'),
+      });
+      return checks;
+    }
 
     // A contabilidade é a parte que mais muda entre versões do IXC: percorre as
     // combinações conhecidas e diz qual respondeu. Duas instalações do mesmo ERP
@@ -753,7 +777,13 @@ export class IxcAdapter implements ErpAdapter {
       qtype: 'cliente_contrato.id_cliente', query: idCliente, oper: '=',
       page: '1', rp: '10',
     });
-    return (data.registros ?? []).length === 1;
+    // Contrato cancelado não gera sessão nova: contar com ele fazia quem trocou
+    // de plano (contrato velho desativado + novo) nunca ter gráfico quando o
+    // radusuarios está fechado para a API.
+    const emOperacao = (data.registros ?? []).filter(
+      (c) => this.mapContractStatus(c.status_internet || c.status) !== 'cancelled',
+    );
+    return emOperacao.length === 1;
   }
 
   /** Conexão atual do assinante — vem do radusuarios, ligado ao contrato. */
