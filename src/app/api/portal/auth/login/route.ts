@@ -114,6 +114,26 @@ export async function POST(req: NextRequest) {
     return new NextResponse('Informe sua senha para entrar.', { status: 400 });
   }
 
+  const adapter = getAdapterForTenant(tenant);
+
+  // Com senha, quem manda é o ERP: o assinante usa a mesma senha da central
+  // do IXC. Antes a senha só era comparada com a do Supabase, criada no
+  // primeiro acesso (aleatória no modo só-CPF), e a senha do ERP nunca batia.
+  // null = o ERP não tem senha para esse cliente → cai na senha local.
+  let erpPasswordOk: boolean | null = null;
+  if (requirePassword && adapter.verifyCustomerPassword) {
+    try {
+      erpPasswordOk = await adapter.verifyCustomerPassword(cpfClean, String(password));
+    } catch (e) {
+      // ERP fora do ar não pode trancar todo mundo: tenta a senha local.
+      console.error('[portal-login] falha ao conferir senha no ERP', e);
+      erpPasswordOk = null;
+    }
+    if (erpPasswordOk === false) {
+      return new NextResponse('CPF ou senha incorretos', { status: 401 });
+    }
+  }
+
   // 1. Já existe no DB?
   // Guardamos só os dígitos, mas cadastros antigos (ou vindos de uma
   // sincronização) podem estar formatados. Procura as duas escritas.
@@ -127,7 +147,6 @@ export async function POST(req: NextRequest) {
 
   // 2. Não → busca no ERP e materializa.
   if (!customer) {
-    const adapter = getAdapterForTenant(tenant);
 
     // Integração fora do ar não é CPF errado. O ERP recusado devolvia lista
     // vazia e o assinante levava "Cliente não encontrado" na cara, mandando
@@ -219,7 +238,11 @@ export async function POST(req: NextRequest) {
   }
 
   // 4. Sessão.
-  if (requirePassword) {
+  if (requirePassword && erpPasswordOk === true) {
+    // Senha já conferida no ERP: a sessão é emitida pelo servidor.
+    const err = await signInWithoutPassword(sb, admin, authEmail);
+    if (err) return new NextResponse(err, { status: 500 });
+  } else if (requirePassword) {
     const { error: loginErr } = await sb.auth.signInWithPassword({ email: authEmail, password });
     if (loginErr) return new NextResponse('CPF ou senha incorretos', { status: 401 });
   } else {

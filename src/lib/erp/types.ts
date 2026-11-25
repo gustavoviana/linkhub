@@ -142,6 +142,13 @@ export interface ErpAdapter {
   listInvoicesByContract(contractExternalId: string, opts?: { onlyOpen?: boolean }): Promise<ErpInvoice[]>;
   getInvoice(invoiceExternalId: string): Promise<ErpInvoice | null>;
 
+  /**
+   * Confere a senha que o assinante usa na central do próprio ERP.
+   * true/false = o ERP tem senha cadastrada e ela confere ou não;
+   * null = o ERP não guarda senha para esse cliente (o login cai na senha local).
+   */
+  verifyCustomerPassword?(cpf: string, password: string): Promise<boolean | null>;
+
   /** Opcionais: nem todo ERP expõe. A central esconde o bloco quando faltam. */
   getConnection?(contractExternalId: string): Promise<ErpConnection | null>;
   getUsage?(contractExternalId: string, range?: ErpUsageRange, login?: string): Promise<ErpUsagePoint[]>;

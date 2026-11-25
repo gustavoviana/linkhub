@@ -1,4 +1,5 @@
 import type { ErpAdapter, ErpCheck, ErpCustomer, ErpPlan, ErpContract, ErpInvoice, ErpConfig, ErpConnection, ErpUsagePoint, ErpUsageRange, ErpPix } from './types';
+import crypto from 'node:crypto';
 import { usageSlots } from './usage';
 import { documentVariants } from '@/lib/documento';
 import { explicarErroDoErp, limparMensagem } from './erros';
@@ -552,19 +553,51 @@ export class IxcAdapter implements ErpAdapter {
     });
   }
 
-  async findCustomerByCpf(cpf: string): Promise<ErpCustomer | null> {
+  private async findRawCustomer(cpf: string): Promise<any | null> {
     // O IXC guarda cnpj_cpf do jeito que foi digitado no cadastro — na maioria
     // das instalações, formatado. Buscar só pelos dígitos não encontra
     // ninguém, então tentamos as duas escritas antes de desistir.
-    let c: any = null;
     for (const variant of documentVariants(cpf)) {
       const data = await this.req<IxcListResponse<any>>('cliente', {
         qtype: 'cliente.cnpj_cpf', query: variant, oper: '=',
         page: '1', rp: '1',
       });
-      c = data.registros?.[0];
-      if (c) break;
+      const c = data.registros?.[0];
+      if (c) return c;
     }
+    return null;
+  }
+
+  /**
+   * A central do cliente do IXC entra com o campo `senha` do cadastro. Ele
+   * fica em texto puro, ou em MD5 quando `senha_hotsite_md5` = "S". Conferimos
+   * aqui para o assinante usar no app a mesma senha que já usa lá.
+   */
+  async verifyCustomerPassword(cpf: string, password: string): Promise<boolean | null> {
+    const c = await this.findRawCustomer(cpf);
+    if (!c) return false;
+
+    const stored = String(c.senha ?? '').trim();
+    if (!stored) return null;
+
+    const same = (a: string, b: string) => {
+      const ba = Buffer.from(a);
+      const bb = Buffer.from(b);
+      return ba.length === bb.length && crypto.timingSafeEqual(ba, bb);
+    };
+
+    if (same(stored, password)) return true;
+    // Instalações com MD5 ligado — ou cadastros migrados que ficaram em hash
+    // sem a flag — guardam 32 hex.
+    if (c.senha_hotsite_md5 === 'S' || /^[a-f0-9]{32}$/i.test(stored)) {
+      const md5 = crypto.createHash('md5').update(password).digest('hex');
+      if (same(stored.toLowerCase(), md5)) return true;
+    }
+    return false;
+  }
+
+  async findCustomerByCpf(cpf: string): Promise<ErpCustomer | null> {
+    const c = await this.findRawCustomer(cpf);
     if (!c) return null;
     return {
       externalId: String(c.id),
