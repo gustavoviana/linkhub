@@ -31,3 +31,12 @@ export function openWith(sealed: string, keys: Keys): string;
 export function normalizeFingerprint(value: string | null | undefined): string;
 export function inspectKeystore(keystoreBase64: string, password: string, alias: string): { certPem: string; sha256: string };
 export function planRow(row: KeystoreRow, keys: Keys & { v2: Buffer }): RowPlan;
+
+export interface BackupComparable {
+  tenant_id: string;
+  keystore_data: string | null;
+  keystore_password: string | null;
+  keystore_sha256: string | null;
+}
+export function verifyRowV2(row: KeystoreRow, v2: Buffer): { sha256: string };
+export function missingBackups(current: BackupComparable[], backups: BackupComparable[]): string[];

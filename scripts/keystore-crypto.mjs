@@ -148,3 +148,61 @@ export function planRow(row, keys) {
 
   return { action: Object.keys(patch).length ? 'update' : 'skip', patch, sha256 };
 }
+
+/**
+ * Conferência depois de recifrar: a linha tem que abrir SÓ com a chave nova,
+ * a keystore tem que bater com o SHA-256 gravado e o certificado guardado
+ * (upload_cert_pem) tem que ter a mesma impressão digital.
+ *
+ * @param {{
+ *   keystore_data: string | null,
+ *   keystore_password: string | null,
+ *   keystore_sha256: string | null,
+ *   keystore_alias: string,
+ *   upload_cert_pem: string | null,
+ * }} row
+ * @param {Buffer} v2
+ * @returns {{ sha256: string }}
+ */
+export function verifyRowV2(row, v2) {
+  if (!row.keystore_data || !row.keystore_password) throw new KeystoreError('sem_keystore');
+  if (versionOf(row.keystore_data) !== 'v2' || versionOf(row.keystore_password) !== 'v2') {
+    throw new KeystoreError('ainda_nao_e_v2');
+  }
+  const password = openWith(row.keystore_password, { v2 });
+  const keystore = openWith(row.keystore_data, { v2 });
+  const { sha256 } = inspectKeystore(keystore, password, row.keystore_alias);
+  if (sha256 !== normalizeFingerprint(row.keystore_sha256)) throw new KeystoreError('sha256_nao_confere');
+  if (!row.upload_cert_pem) throw new KeystoreError('certificado_nao_extraido');
+  let pemSha;
+  try {
+    pemSha = new crypto.X509Certificate(row.upload_cert_pem).fingerprint256.toUpperCase();
+  } catch {
+    throw new KeystoreError('certificado_corrompido');
+  }
+  if (pemSha !== sha256) throw new KeystoreError('certificado_nao_confere');
+  return { sha256 };
+}
+
+/**
+ * Quais provedores NÃO têm no backup uma cópia exata (keystore, senha e
+ * SHA-256) dos valores atuais. Lista vazia = backup completo.
+ *
+ * @param {Array<{ tenant_id: string, keystore_data: string | null, keystore_password: string | null, keystore_sha256: string | null }>} current
+ * @param {Array<{ tenant_id: string, keystore_data: string | null, keystore_password: string | null, keystore_sha256: string | null }>} backups
+ * @returns {string[]}
+ */
+export function missingBackups(current, backups) {
+  return current
+    .filter(
+      (c) =>
+        !backups.some(
+          (b) =>
+            b.tenant_id === c.tenant_id &&
+            b.keystore_data === c.keystore_data &&
+            b.keystore_password === c.keystore_password &&
+            b.keystore_sha256 === c.keystore_sha256,
+        ),
+    )
+    .map((c) => c.tenant_id);
+}

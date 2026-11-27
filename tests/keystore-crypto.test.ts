@@ -1,8 +1,17 @@
 import { X509Certificate, randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import forge from 'node-forge';
 import { describe, expect, it } from 'vitest';
-import { inspectKeystore, openWith, planRow, sealWith, versionOf } from '../scripts/keystore-crypto.mjs';
+import {
+  inspectKeystore,
+  missingBackups,
+  openWith,
+  planRow,
+  sealWith,
+  verifyRowV2,
+  versionOf,
+} from '../scripts/keystore-crypto.mjs';
 
 // Keystore de teste gerada com `keytool -genkeypair -storetype PKCS12` (o
 // mesmo comando do workflow). Não assina nada de verdade.
@@ -74,5 +83,60 @@ describe('planRow (recifragem)', () => {
     const row = { ...legacyRow(), keystore_data: null, keystore_sha256: null };
     const plan = planRow(row, { v1, v2 });
     expect(Object.keys(plan.patch)).toEqual(['keystore_password']);
+  });
+});
+
+describe('verifyRowV2 (conferência depois de gravar)', () => {
+  function migrated() {
+    return { ...legacyRow(), ...planRow(legacyRow(), { v1, v2 }).patch };
+  }
+
+  it('abre só com a chave nova e confere SHA-256 e certificado', () => {
+    expect(verifyRowV2(migrated(), v2).sha256).toBe(SHA);
+  });
+
+  it('recusa linha que ainda está em v1', () => {
+    expect(() => verifyRowV2({ ...legacyRow(), upload_cert_pem: PEM }, v2)).toThrow('ainda_nao_e_v2');
+  });
+
+  it('recusa chave nova errada', () => {
+    expect(() => verifyRowV2(migrated(), randomBytes(32))).toThrow('nao_decifra_v2');
+  });
+
+  it('recusa certificado válido de outra chave', () => {
+    const keys = forge.pki.rsa.generateKeyPair({ bits: 1024, e: 0x10001 });
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = '01';
+    cert.validity.notBefore = new Date();
+    cert.validity.notAfter = new Date(Date.now() + 86_400_000);
+    cert.setSubject([{ name: 'commonName', value: 'outra' }]);
+    cert.setIssuer([{ name: 'commonName', value: 'outra' }]);
+    cert.sign(keys.privateKey, forge.md.sha256.create());
+    const other = forge.pki.certificateToPem(cert);
+    expect(() => verifyRowV2({ ...migrated(), upload_cert_pem: other }, v2)).toThrow('certificado_nao_confere');
+  });
+
+  it('recusa certificado corrompido', () => {
+    expect(() => verifyRowV2({ ...migrated(), upload_cert_pem: 'lixo' }, v2)).toThrow('certificado_corrompido');
+  });
+
+  it('recusa sem certificado extraído', () => {
+    expect(() => verifyRowV2({ ...migrated(), upload_cert_pem: null }, v2)).toThrow('certificado_nao_extraido');
+  });
+});
+
+describe('missingBackups', () => {
+  const a = { tenant_id: 'a', keystore_data: 'v1.x', keystore_password: 'v1.p', keystore_sha256: 'AA' };
+  const b = { tenant_id: 'b', keystore_data: 'v1.y', keystore_password: 'v1.q', keystore_sha256: 'BB' };
+
+  it('backup completo e exato: nada falta', () => {
+    expect(missingBackups([a, b], [b, a])).toEqual([]);
+  });
+
+  it('aponta quem não tem cópia ou tem cópia diferente', () => {
+    expect(missingBackups([a, b], [a])).toEqual(['b']);
+    expect(missingBackups([a, b], [a, { ...b, keystore_data: 'v1.outro' }])).toEqual(['b']);
+    expect(missingBackups([a], [{ ...a, tenant_id: 'b' }])).toEqual(['a']);
   });
 });
