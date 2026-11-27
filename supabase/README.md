@@ -25,6 +25,8 @@ Cole o SQL no **SQL Editor** do projeto Supabase, na ordem:
 | `migrations/20260731_008_login_screen.sql` | **pendente** — sem ele, a imagem e os textos da tela de entrada não salvam |
 | `migrations/20261016_013_tenant_chat.sql` | **pendente** (conferido em 16/10/2026) — sem ele, a tela Chat de atendimento mostra o SQL e o botão não aparece na central |
 | `migrations/20261127_014_app_versions.sql` | **pendente** (27/11/2026) — versão por provedor, reserva atômica do código, trava do pacote, migração de app publicado e backup da recifragem. Rodar **antes** do deploy do código que usa as funções `app_reserve_build` / `app_finish_build`. Pode rodar mais de uma vez |
+| `migrations/20261127_015_rate_limit.sql` | **pendente** — limite de tentativas compartilhado (`rate_limit_hit`). Rodar **antes** do deploy: sem ele, build, certificado, publicado e iOS respondem 503. Pode rodar mais de uma vez |
+| `migrations/20261127_016_publicados_legados.sql` | **pendente** — marca como publicados LM NET 1.0.2 (3) e Marau Net 1.0.0 (1), com auditoria. Conferir no Play Console antes. Idempotente |
 
 O estado de cada um foi conferido consultando as colunas em produção, não pela
 data do arquivo.
