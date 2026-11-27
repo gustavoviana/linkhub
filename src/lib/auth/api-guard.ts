@@ -13,8 +13,23 @@ import { RANK, resolveTenantAccess } from './tenant-access';
 // mora em `resolveTenantAccess`, a mesma das páginas.
 
 type Guard =
-  | { error: NextResponse; admin?: undefined; userId?: undefined; email?: undefined; role?: undefined }
-  | { error?: undefined; admin: ReturnType<typeof createAdminClient>; userId: string; email: string | null; role: AdminRole };
+  | {
+      error: NextResponse;
+      admin?: undefined;
+      userId?: undefined;
+      email?: undefined;
+      role?: undefined;
+      viaPlatform?: undefined;
+    }
+  | {
+      error?: undefined;
+      admin: ReturnType<typeof createAdminClient>;
+      userId: string;
+      email: string | null;
+      role: AdminRole;
+      /** Super administrador da plataforma, sem vínculo com o provedor. */
+      viaPlatform: boolean;
+    };
 
 export async function requireTenantApi(tenantId: string, minRole: AdminRole = 'admin'): Promise<Guard> {
   const r = await resolveTenantAccess(tenantId);
@@ -25,7 +40,13 @@ export async function requireTenantApi(tenantId: string, minRole: AdminRole = 'a
   if (r.kind === 'negado' || RANK[r.access.role] < RANK[minRole]) {
     return { error: new NextResponse('Forbidden', { status: 403 }) };
   }
-  return { admin: createAdminClient(), userId: r.access.userId, email: r.access.email, role: r.access.role };
+  return {
+    admin: createAdminClient(),
+    userId: r.access.userId,
+    email: r.access.email,
+    role: r.access.role,
+    viaPlatform: r.access.viaPlatform,
+  };
 }
 
 /** Dono ou administrador do provedor. */

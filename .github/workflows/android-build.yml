@@ -6,6 +6,14 @@ name: Android — pacote do provedor
 # Quem dispara é o botão "Gerar pacote Android" em /admin/tenants/[id]/aplicativo.
 # O painel manda um passe assinado; este job usa o passe para buscar a ficha
 # do app e para devolver o pacote. Nenhuma chave da Supabase entra aqui.
+#
+# Este repositório é público, e o log também. Por isso:
+#  * o passe e a senha da keystore são mascarados (::add-mask::) antes de
+#    qualquer passo que os use; o passe é lido do arquivo do evento, e não
+#    escrito no script do passo;
+#  * a senha vai para keytool/jarsigner por variável de ambiente
+#    (-storepass:env), nunca na linha de comando;
+#  * o painel só aceita o passe enquanto o build está na fila ou rodando.
 
 on:
   workflow_dispatch:
@@ -19,6 +27,12 @@ on:
       token:
         description: Passe assinado do build
         required: true
+      version_code:
+        description: versionCode reservado pelo painel
+        required: true
+      version_name:
+        description: versionName reservado pelo painel
+        required: true
       label:
         description: Nome e versão, só para aparecer na lista de execuções
         required: false
@@ -31,6 +45,14 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # Primeiro passo, antes de qualquer outro tocar no passe. O valor sai do
+      # arquivo do evento: escrever a expressão do input aqui imprimiria o
+      # passe no próprio script do passo, antes de a máscara valer.
+      - name: Proteger segredos
+        run: |
+          TOKEN=$(jq -r '.inputs.token' "$GITHUB_EVENT_PATH")
+          echo "::add-mask::$TOKEN"
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -58,11 +80,23 @@ jobs:
           API: ${{ inputs.api_url }}
           BUILD: ${{ inputs.build_id }}
           TOKEN: ${{ inputs.token }}
+          WANT_CODE: ${{ inputs.version_code }}
+          WANT_NAME: ${{ inputs.version_name }}
         run: |
           set -euo pipefail
           curl -fsS "$API/api/app-build/$BUILD?token=$TOKEN" -o config.json
+          # Mascara a senha antes de qualquer outra linha poder imprimi-la.
+          KS_PASS=$(jq -r '.keystore_password // empty' config.json)
+          if [ -n "$KS_PASS" ]; then echo "::add-mask::$KS_PASS"; fi
           echo "app=$(jq -r .app_name config.json)" >> "$GITHUB_OUTPUT"
           echo "pkg=$(jq -r .package_id config.json)" >> "$GITHUB_OUTPUT"
+          # A versão do job e a da ficha têm que ser a mesma reserva.
+          GOT_CODE=$(jq -r .version_code config.json)
+          GOT_NAME=$(jq -r .version_name config.json)
+          if [ "$GOT_CODE" != "$WANT_CODE" ] || [ "$GOT_NAME" != "$WANT_NAME" ]; then
+            echo "Versão divergente: job $WANT_NAME ($WANT_CODE), ficha $GOT_NAME ($GOT_CODE)." >&2
+            exit 1
+          fi
           jq 'del(.keystore_password, .keystore_base64)' config.json
 
       - name: Montar o projeto Android
@@ -80,7 +114,8 @@ jobs:
         run: |
           set -euo pipefail
           ALIAS=$(jq -r .keystore_alias config.json)
-          PASS=$(jq -r .keystore_password config.json)
+          KS_PASS=$(jq -r .keystore_password config.json)
+          export KS_PASS
           EXISTING=$(jq -r '.keystore_base64 // empty' config.json)
           CN=$(jq -r .app_name config.json)
 
@@ -89,18 +124,22 @@ jobs:
             echo "novo=false" >> "$GITHUB_OUTPUT"
           else
             # Primeiro build deste provedor: a chave nasce aqui e volta
-            # cifrada para o painel. 10000 dias porque a Play exige validade
-            # até pelo menos 2033.
-            keytool -genkeypair -v \
-              -keystore projeto/android.keystore \
+            # cifrada para o painel. 10000 dias (27 anos): a Play exige
+            # validade até pelo menos 2033.
+            keytool -genkeypair \
+              -keystore projeto/android.keystore -storetype PKCS12 \
               -alias "$ALIAS" \
               -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "$PASS" -keypass "$PASS" \
+              -storepass:env KS_PASS -keypass:env KS_PASS \
               -dname "CN=$CN, OU=LinkHub, O=LinkHub, L=Brasil, S=Brasil, C=BR"
+            # Certificado público, para o provedor baixar em .pem.
+            keytool -exportcert -rfc -alias "$ALIAS" \
+              -keystore projeto/android.keystore -storepass:env KS_PASS \
+              -file projeto/upload_certificate.pem
             echo "novo=true" >> "$GITHUB_OUTPUT"
           fi
 
-          FP=$(keytool -list -v -keystore projeto/android.keystore -alias "$ALIAS" -storepass "$PASS" \
+          FP=$(keytool -list -v -keystore projeto/android.keystore -alias "$ALIAS" -storepass:env KS_PASS \
                | grep -i 'SHA256:' | head -1 | sed 's/.*SHA256: *//' | tr -d ' \r')
           echo "sha256=$FP" >> "$GITHUB_OUTPUT"
           echo "Impressão digital de upload: $FP"
@@ -116,11 +155,12 @@ jobs:
         run: |
           set -euo pipefail
           ALIAS=$(jq -r .keystore_alias config.json)
-          PASS=$(jq -r .keystore_password config.json)
+          KS_PASS=$(jq -r .keystore_password config.json)
+          export KS_PASS
           AAB=projeto/app/build/outputs/bundle/release/app-release.aab
           jarsigner -verbose:false -sigalg SHA256withRSA -digestalg SHA-256 \
             -keystore projeto/android.keystore \
-            -storepass "$PASS" -keypass "$PASS" \
+            -storepass:env KS_PASS -keypass:env KS_PASS \
             "$AAB" "$ALIAS"
           jarsigner -verify "$AAB" > /dev/null
           ls -lh "$AAB"
@@ -132,13 +172,16 @@ jobs:
           BUILD: ${{ inputs.build_id }}
           TOKEN: ${{ inputs.token }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          NOVO: ${{ steps.signing.outputs.novo }}
+          FP: ${{ steps.signing.outputs.sha256 }}
         run: |
           set -euo pipefail
           ARGS=(-F "status=done" -F "run_url=$RUN"
                 -F "aab=@projeto/app/build/outputs/bundle/release/app-release.aab")
-          if [ "${{ steps.signing.outputs.novo }}" = "true" ]; then
+          if [ "$NOVO" = "true" ]; then
             ARGS+=(-F "keystore=@projeto/android.keystore"
-                   -F "keystore_sha256=${{ steps.signing.outputs.sha256 }}")
+                   -F "upload_cert=@projeto/upload_certificate.pem"
+                   -F "keystore_sha256=$FP")
           fi
           curl -fsS -X POST "${ARGS[@]}" "$API/api/app-build/$BUILD?token=$TOKEN"
 

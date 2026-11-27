@@ -99,6 +99,19 @@ if (target < TARGET_SDK_MINIMO || compile < target) {
   process.exit(1);
 }
 
+// A versão no build.gradle tem que ser a que o painel reservou. Se o
+// template do Bubblewrap mudar o jeito de ler a versão, o build para aqui em
+// vez de sair com 1 e ser recusado pela Play.
+const versionCode = lido('versionCode');
+const versionName = gradle.match(/versionName\s+"([^"]+)"/)?.[1];
+if (versionCode !== Number(config.version_code) || versionName !== config.version_name) {
+  console.error(
+    `build.gradle saiu com ${versionName} (${versionCode}), mas o painel reservou ` +
+      `${config.version_name} (${config.version_code}).`,
+  );
+  process.exit(1);
+}
+
 console.log(
-  `Projeto pronto em ${out} — ${manifest.packageId} ${manifest.appVersion} (targetSdk ${target})`,
+  `Projeto pronto em ${out} — ${manifest.packageId} ${versionName} (${versionCode}), targetSdk ${target}`,
 );

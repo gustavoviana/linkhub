@@ -7,13 +7,17 @@ import { enviarImagem } from '@/lib/images/enviar';
 import { Button } from '@/components/ui/button';
 import { Input, Field, Label } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, CardTitle, CardSubtitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/admin/page-header';
 import { Icon } from '@/components/portal/icons';
 import { CopyLink } from '../copy-link';
 import type { Tenant } from '@/lib/supabase/types';
 import type { AppBuild, TenantApp } from '@/lib/tenant/app-config';
+import { isSemver, nextIosVersion, nextVersion, versionLabel } from '@/lib/tenant/app-version';
+import { buildBlockReason, isValidPackageId } from '@/lib/tenant/app-rules';
 import { cn } from '@/lib/utils';
+import { BuildsCard, PENDING } from './builds-card';
+import { MigrationCard } from './migration-card';
+import { UploadKeyCard } from './upload-key-card';
 
 // Aba Aplicativo: a ficha do app do provedor e o botão que gera o pacote
 // para a Play Store.
@@ -27,29 +31,90 @@ import { cn } from '@/lib/utils';
 // ícone desenhado à parte, que é o normal quando a logo é deitada.
 
 const MAX_ICON_BYTES = 2 * 1024 * 1024;
-const PENDING = new Set(['queued', 'running']);
+const MAX_VERSION_CODE = 2_100_000_000;
 
 export default function AppForm({
   tenant,
   app,
   saved,
   builds,
+  published,
+  isPlatformAdmin,
+  isOwner,
   origin,
+  versionsReady,
 }: {
   tenant: Tenant;
   app: TenantApp;
   saved: boolean;
-  builds: AppBuild[];
+  /** null = a leitura dos builds falhou. */
+  builds: AppBuild[] | null;
+  /** Algum build já foi marcado como publicado: o pacote trava. */
+  published: boolean;
+  isPlatformAdmin: boolean;
+  isOwner: boolean;
   origin: string;
+  versionsReady: boolean;
 }) {
   const router = useRouter();
   const [form, setForm] = useState({
     app_name: app.app_name,
     package_id: app.package_id,
+    confirm_package_id: '',
     icon_url: app.icon_url ?? '',
     theme_color: app.theme_color ?? tenant.primary_color,
     play_signing_sha256: app.play_signing_sha256 ?? '',
+    next_version_name: app.next_version_name ?? '',
+    store_version_floor: app.store_version_floor > 0 ? String(app.store_version_floor) : '',
+    store_version_name: app.store_version_name ?? '',
+    ios_next_version_name: app.ios_next_version_name ?? '',
   });
+
+  // Prévia da próxima versão com o que está digitado, antes de salvar. O
+  // número que vale é o que o banco reserva no build; a conta é a mesma.
+  const floor = /^\d+$/.test(form.store_version_floor) ? Number(form.store_version_floor) : 0;
+  const preview = nextVersion({
+    version_code: app.version_code,
+    version_name: app.version_name,
+    store_version_floor: floor,
+    store_version_name: isSemver(form.store_version_name) ? form.store_version_name : null,
+    next_version_name: isSemver(form.next_version_name) ? form.next_version_name : null,
+  });
+  const automatic = nextVersion({
+    version_code: app.version_code,
+    version_name: app.version_name,
+    store_version_floor: floor,
+    store_version_name: isSemver(form.store_version_name) ? form.store_version_name : null,
+    next_version_name: null,
+  });
+  const iosPreview = nextIosVersion({
+    ios_build_number: app.ios_build_number,
+    ios_version_name: app.ios_version_name,
+    ios_next_version_name: isSemver(form.ios_next_version_name) ? form.ios_next_version_name : null,
+  });
+  const fieldErrors = {
+    next_version_name:
+      form.next_version_name && !isSemver(form.next_version_name) ? 'Use o formato 1.2.3, só com números.' : undefined,
+    store_version_name:
+      form.store_version_name && !isSemver(form.store_version_name) ? 'Use o formato 1.2.3, só com números.' : undefined,
+    ios_next_version_name:
+      form.ios_next_version_name && !isSemver(form.ios_next_version_name)
+        ? 'Use o formato 1.2.3, só com números.'
+        : undefined,
+    store_version_floor:
+      form.store_version_floor && (!/^\d+$/.test(form.store_version_floor) || floor >= MAX_VERSION_CODE)
+        ? 'Um número inteiro, até 2100000000.'
+        : undefined,
+    package_id:
+      form.package_id && !isValidPackageId(form.package_id)
+        ? 'Pacote inválido. Use algo como br.com.provedor.central (até 150 caracteres).'
+        : undefined,
+  };
+  const hasFieldErrors = Object.values(fieldErrors).some(Boolean);
+
+  const packageLocked = published && !isPlatformAdmin;
+  const packageOverride = published && isPlatformAdmin && form.package_id !== app.package_id;
+  const blockReason = buildBlockReason(app);
   // Quadrada = ícone pronto, e é assim que a rota /icons o entrega: inteiro,
   // sem o gradiente da marca atrás. O preview segue a mesma regra para não
   // prometer uma coisa e o celular mostrar outra.
@@ -60,7 +125,7 @@ export default function AppForm({
   const [ok, setOk] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const running = builds.find((b) => PENDING.has(b.status));
+  const running = (builds ?? []).find((b) => b.platform !== 'ios' && PENDING.has(b.status));
 
   // Enquanto há build na fila, a página se atualiza sozinha — o runner leva
   // alguns minutos e ninguém deveria ficar apertando F5.
@@ -89,43 +154,71 @@ export default function AppForm({
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (hasFieldErrors) {
+      setError('Corrija os campos marcados antes de salvar.');
+      return;
+    }
     setSaving(true);
     setError(null);
     setOk(null);
-    const res = await fetch(`/api/tenants/${tenant.id}/app`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        app_name: form.app_name,
-        package_id: form.package_id,
-        icon_url: form.icon_url || null,
-        theme_color: form.theme_color || null,
-        play_signing_sha256: form.play_signing_sha256 || null,
-      }),
-    });
-    setSaving(false);
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (!res.ok) {
-      setError(body.error ?? 'Não foi possível salvar.');
-      return;
+    try {
+      const res = await fetch(`/api/tenants/${tenant.id}/app`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app_name: form.app_name,
+          package_id: form.package_id,
+          confirm_package_id: packageOverride ? form.confirm_package_id : null,
+          icon_url: form.icon_url || null,
+          theme_color: form.theme_color || null,
+          play_signing_sha256: form.play_signing_sha256 || null,
+          ...(versionsReady
+            ? {
+                next_version_name: form.next_version_name || null,
+                store_version_name: form.store_version_name || null,
+                ios_next_version_name: form.ios_next_version_name || null,
+                store_version_floor: floor,
+              }
+            : {}),
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(body.error ?? 'Não foi possível salvar.');
+        return;
+      }
+      setOk('Ficha salva.');
+      router.refresh();
+    } catch {
+      setError('Sem conexão. Tente de novo.');
+    } finally {
+      setSaving(false);
     }
-    setOk('Ficha salva.');
-    router.refresh();
   }
 
   async function build() {
     setBuilding(true);
     setError(null);
     setOk(null);
-    const res = await fetch(`/api/tenants/${tenant.id}/app/build`, { method: 'POST' });
-    setBuilding(false);
-    const body = (await res.json().catch(() => ({}))) as { error?: string };
-    if (!res.ok) {
-      setError(body.error ?? 'Não foi possível iniciar o build.');
-      return;
+    try {
+      const res = await fetch(`/api/tenants/${tenant.id}/app/build`, { method: 'POST' });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        version_code?: number;
+        version_name?: string;
+      };
+      if (!res.ok) {
+        setError(body.error ?? 'Não foi possível iniciar o build.');
+        return;
+      }
+      const label = body.version_name ? ` ${body.version_name} (${body.version_code})` : '';
+      setOk(`Build${label} na fila. Leva de 5 a 10 minutos.`);
+      router.refresh();
+    } catch {
+      setError('Sem conexão. Tente de novo.');
+    } finally {
+      setBuilding(false);
     }
-    setOk('Build na fila. Leva de 5 a 10 minutos.');
-    router.refresh();
   }
 
   const iconPreview = form.icon_url || tenant.favicon_url || tenant.logo_url;
@@ -144,7 +237,14 @@ export default function AppForm({
         }
         actions={
           <>
-            <Button type="button" variant="outline" onClick={build} loading={building} disabled={Boolean(running)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={build}
+              loading={building}
+              disabled={Boolean(running) || Boolean(blockReason)}
+              title={blockReason ?? undefined}
+            >
               {running ? 'Build em andamento…' : 'Gerar pacote .aab'}
             </Button>
             <Button type="submit" loading={saving}>
@@ -154,8 +254,13 @@ export default function AppForm({
         }
       />
 
-      {(ok || error || !saved) && (
-        <div className="px-6 lg:px-8 pt-5">
+      {(ok || error || !saved || !versionsReady) && (
+        <div className="px-6 lg:px-8 pt-5 space-y-2">
+          {!versionsReady && (
+            <Aviso tom="warning" icone="file">
+              Rode a migração 014 no banco para liberar versão, migração e certificado.
+            </Aviso>
+          )}
           {error && <Aviso tom="danger" icone="shield">{error}</Aviso>}
           {ok && <Aviso tom="success" icone="check">{ok}</Aviso>}
           {!saved && !error && !ok && (
@@ -207,17 +312,42 @@ export default function AppForm({
                 </Field>
                 <Field
                   label="Identificador do pacote"
-                  hint={app.keystore_data ? 'Travado: o app já foi assinado.' : 'Não muda depois de publicar.'}
+                  error={fieldErrors.package_id}
+                  hint={
+                    packageLocked
+                      ? 'Travado: o app já foi publicado na loja.'
+                      : published
+                        ? 'App publicado: só o super administrador troca, com confirmação.'
+                        : 'Trava quando o primeiro build for marcado como publicado.'
+                  }
                 >
                   <Input
                     className="font-mono text-[13px]"
                     value={form.package_id}
-                    disabled={Boolean(app.keystore_data)}
-                    onChange={(e) => setForm({ ...form, package_id: e.target.value.toLowerCase() })}
+                    maxLength={150}
+                    disabled={packageLocked}
+                    onChange={(e) => setForm({ ...form, package_id: e.target.value.toLowerCase().trim() })}
                     required
                   />
                 </Field>
               </div>
+
+              {packageOverride && (
+                <div className="rounded-[10px] border border-danger/30 bg-danger/[0.06] p-3.5 space-y-3">
+                  <p className="text-xs text-danger leading-relaxed">
+                    <strong className="font-semibold">Este app já está publicado.</strong> Com outro pacote, a Play
+                    trata como app novo: os usuários atuais não recebem a atualização. Para confirmar, digite o pacote
+                    novo de novo.
+                  </p>
+                  <Input
+                    className="font-mono text-[13px]"
+                    placeholder={form.package_id}
+                    value={form.confirm_package_id}
+                    onChange={(e) => setForm({ ...form, confirm_package_id: e.target.value.toLowerCase().trim() })}
+                    aria-label="Confirme o pacote novo"
+                  />
+                </div>
+              )}
 
               <div>
                 <Label>Ícone do aplicativo</Label>
@@ -292,12 +422,73 @@ export default function AppForm({
                     />
                   </div>
                 </Field>
-                <Field label="Versão atual">
-                  <Input value={`${app.version_name} (${app.version_code})`} readOnly className="font-mono" />
-                </Field>
               </div>
             </CardBody>
           </Card>
+
+          {versionsReady && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Versão</CardTitle>
+                <CardSubtitle>
+                  Próximo build: <span className="font-mono text-fg">{versionLabel(preview)}</span>
+                  {app.version_code > 0 && (
+                    <>
+                      {' '}
+                      · último gerado aqui: <span className="font-mono">{versionLabel(app)}</span>
+                    </>
+                  )}
+                </CardSubtitle>
+              </CardHeader>
+              <CardBody className="space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                  <Field
+                    label="Versão do próximo build"
+                    error={fieldErrors.next_version_name}
+                    hint={`Vazio = ${automatic.version_name}, automático. O código sai ${preview.version_code}.`}
+                  >
+                    <Input
+                      className="font-mono"
+                      inputMode="decimal"
+                      placeholder={automatic.version_name}
+                      value={form.next_version_name}
+                      onChange={(e) => setForm({ ...form, next_version_name: e.target.value.trim() })}
+                    />
+                  </Field>
+                  <Field
+                    label="Código de versão atual na loja"
+                    error={fieldErrors.store_version_floor}
+                    hint="Preencha só se o app já foi publicado por outro sistema. Veja em Play Console > Pacotes de apps."
+                  >
+                    <Input
+                      className="font-mono"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={form.store_version_floor}
+                      onChange={(e) => setForm({ ...form, store_version_floor: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </Field>
+                </div>
+                {floor > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <Field
+                      label="Versão atual na loja"
+                      error={fieldErrors.store_version_name}
+                      hint="O nome da versão ao lado do código, no mesmo lugar. Ex.: 3.0.11."
+                    >
+                      <Input
+                        className="font-mono"
+                        inputMode="decimal"
+                        placeholder="3.0.11"
+                        value={form.store_version_name}
+                        onChange={(e) => setForm({ ...form, store_version_name: e.target.value.trim() })}
+                      />
+                    </Field>
+                  </div>
+                )}
+              </CardBody>
+            </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -329,13 +520,36 @@ export default function AppForm({
                 </a>{' '}
                 passa a autorizar o app — sem republicar nada.
               </p>
-              {app.keystore_sha256 && (
-                <p className="text-xs text-fg-3 font-mono break-all">
-                  Chave de upload: {app.keystore_sha256}
-                </p>
-              )}
+              <div className="pt-1 border-t border-border">
+                <div className="pt-4">
+                  <UploadKeyCard
+                    tenantId={tenant.id}
+                    sha256={app.keystore_sha256}
+                    hasKeystore={Boolean(app.keystore_sha256)}
+                    hasCertificate={Boolean(app.upload_cert_pem)}
+                    canDownload={isOwner || isPlatformAdmin}
+                    onDownloaded={() => router.refresh()}
+                  />
+                </div>
+              </div>
             </CardBody>
           </Card>
+
+          {versionsReady && (
+            <MigrationCard
+              tenantId={tenant.id}
+              state={app}
+              uploadKey={{
+                sha256: app.keystore_sha256,
+                hasKeystore: Boolean(app.keystore_sha256),
+                hasCertificate: Boolean(app.upload_cert_pem),
+                canDownload: isOwner || isPlatformAdmin,
+              }}
+              building={building}
+              running={Boolean(running)}
+              onBuild={build}
+            />
+          )}
 
           <Card>
             <CardHeader>
@@ -412,6 +626,29 @@ export default function AppForm({
                 deve ser a conta de desenvolvedor do próprio provedor, não a da agência (diretriz
                 4.2.6).
               </p>
+              {versionsReady && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-1">
+                  <Field
+                    label="Versão do próximo projeto iOS"
+                    error={fieldErrors.ios_next_version_name}
+                    hint={`Contador próprio do iOS. O próximo download sai ${versionLabel(iosPreview)}.`}
+                  >
+                    <Input
+                      className="font-mono"
+                      inputMode="decimal"
+                      placeholder={
+                        nextIosVersion({
+                          ios_build_number: app.ios_build_number,
+                          ios_version_name: app.ios_version_name,
+                          ios_next_version_name: null,
+                        }).version_name
+                      }
+                      value={form.ios_next_version_name}
+                      onChange={(e) => setForm({ ...form, ios_next_version_name: e.target.value.trim() })}
+                    />
+                  </Field>
+                </div>
+              )}
               <a
                 href={`/api/tenants/${tenant.id}/app/ios`}
                 className="inline-flex items-center gap-2 text-[13px] font-semibold text-brand hover:underline mt-1"
@@ -419,88 +656,22 @@ export default function AppForm({
                 <Icon name="download" size={15} />
                 Baixar projeto iOS (Xcode)
               </a>
+              <p className="text-xs text-fg-3">
+                Cada download reserva um número de build novo, porque a App Store recusa número repetido.
+              </p>
             </CardBody>
           </Card>
 
-          <Card>
-            {/* O mesmo botão do topo: quem desce até a lista para pegar o
-                pacote procura aqui o "gerar outro" — por exemplo quando a Play
-                recusa um .aab antigo e é preciso uma versão nova. */}
-            <CardHeader className="flex items-start gap-3 flex-wrap">
-              <div className="flex-1 min-w-0">
-                <CardTitle>Builds</CardTitle>
-                <CardSubtitle>O pacote fica guardado — baixe quando for enviar para a loja</CardSubtitle>
-              </div>
-              {builds.length > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={build}
-                  loading={building}
-                  disabled={Boolean(running)}
-                >
-                  {running ? 'Build em andamento…' : 'Gerar nova versão'}
-                </Button>
-              )}
-            </CardHeader>
-            <CardBody>
-              {builds.length === 0 ? (
-                <div className="flex items-center gap-3.5 py-2">
-                  <span className="w-10 h-10 rounded-[11px] bg-bg-3 text-fg-3 flex items-center justify-center shrink-0">
-                    <Icon name="file" size={18} />
-                  </span>
-                  <div>
-                    <div className="text-[13px] font-semibold">Nenhum pacote gerado ainda</div>
-                    <div className="text-xs text-fg-2 mt-0.5">
-                      Salve a ficha e clique em “Gerar pacote .aab” lá em cima. Leva de 5 a 10
-                      minutos.
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {builds.map((b) => (
-                    <div
-                      key={b.id}
-                      className="flex items-center gap-3 p-3 rounded-[10px] border border-border bg-bg/40"
-                    >
-                      <StatusBadge status={b.status} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[13px] font-semibold">
-                          {b.version_name}{' '}
-                          <span className="text-fg-3 font-mono font-normal">({b.version_code})</span>
-                        </div>
-                        <div className="text-[11.5px] text-fg-3 mt-0.5">
-                          {new Date(b.created_at).toLocaleString('pt-BR')}
-                          {b.artifact_bytes ? ` · ${(b.artifact_bytes / 1024 / 1024).toFixed(1)} MB` : ''}
-                        </div>
-                        {b.error && <div className="text-[11.5px] text-danger mt-1 break-words">{b.error}</div>}
-                      </div>
-                      {b.run_url && (
-                        <a
-                          href={b.run_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-[11.5px] text-fg-3 hover:text-fg transition-colors"
-                        >
-                          log ↗
-                        </a>
-                      )}
-                      {b.status === 'done' && b.artifact_path && (
-                        <a
-                          href={`/api/tenants/${tenant.id}/app/download/${b.id}`}
-                          className="text-[13px] font-semibold text-brand hover:underline whitespace-nowrap"
-                        >
-                          Baixar .aab
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardBody>
-          </Card>
+          <BuildsCard
+            tenantId={tenant.id}
+            builds={builds}
+            isPlatformAdmin={isPlatformAdmin}
+            running={Boolean(running)}
+            building={building}
+            blockReason={blockReason}
+            nextLabel={versionLabel(preview)}
+            onBuild={build}
+          />
         </div>
 
         {/* --------------------------------------------------------- prévia */}
@@ -573,7 +744,7 @@ export default function AppForm({
                   [Boolean(tenant.cnpj), 'CNPJ no cadastro'],
                   [Boolean(tenant.support_email), 'E-mail de suporte'],
                   [Boolean(form.play_signing_sha256), 'SHA-256 do Play App Signing'],
-                  [builds.some((b) => b.status === 'done'), 'Pacote .aab gerado'],
+                  [(builds ?? []).some((b) => b.platform !== 'ios' && b.status === 'done'), 'Pacote .aab gerado'],
                 ] as [boolean, string][]
               ).map(([feito, rotulo]) => (
                 <li key={rotulo} className="flex items-center gap-2.5 text-[12.5px]">
@@ -677,20 +848,5 @@ function Aviso({
       </span>
       <span className="leading-relaxed">{children}</span>
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: AppBuild['status'] }) {
-  const map: Record<string, { tone: 'success' | 'info' | 'danger'; label: string }> = {
-    done: { tone: 'success', label: 'pronto' },
-    queued: { tone: 'info', label: 'na fila' },
-    running: { tone: 'info', label: 'gerando' },
-    error: { tone: 'danger', label: 'erro' },
-  };
-  const meta = map[status] ?? map.error!;
-  return (
-    <Badge tone={meta.tone}>
-      <span className={cn(PENDING.has(status) && 'animate-pulse')}>{meta.label}</span>
-    </Badge>
   );
 }

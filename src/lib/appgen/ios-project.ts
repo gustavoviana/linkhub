@@ -3,6 +3,8 @@ import JSZip from 'jszip';
 import type { Tenant } from '@/lib/supabase/types';
 import type { TenantApp } from '@/lib/tenant/app-config';
 import { backgroundColorOf, tenantOrigin, themeColorOf } from '@/lib/tenant/app-config';
+import type { Version } from '@/lib/tenant/app-version';
+import { IOS_VERSION_SCRIPT } from './ios-version-script';
 
 // Projeto Capacitor do provedor, pronto para abrir no Xcode.
 //
@@ -23,7 +25,11 @@ interface IosProject {
   zip: Buffer;
 }
 
-export async function buildIosProject(tenant: Tenant, app: TenantApp): Promise<IosProject> {
+/**
+ * `version` é a versão já reservada para este download: version_name vira
+ * CFBundleShortVersionString e version_code vira CFBundleVersion.
+ */
+export async function buildIosProject(tenant: Tenant, app: TenantApp, version: Version): Promise<IosProject> {
   const origin = tenantOrigin(tenant);
   const theme = themeColorOf(tenant, app);
   const background = backgroundColorOf(tenant, app);
@@ -34,10 +40,13 @@ export async function buildIosProject(tenant: Tenant, app: TenantApp): Promise<I
     `${JSON.stringify(
       {
         name: app.package_id.split('.').pop() ?? 'central',
-        version: app.version_name,
+        version: version.version_name,
         private: true,
         scripts: {
-          'ios:add': 'cap add ios',
+          // O Xcode só existe depois do `cap add ios`; a versão entra logo em
+          // seguida, no projeto gerado.
+          'ios:add': 'cap add ios && node versao-ios.cjs',
+          'ios:version': 'node versao-ios.cjs',
           'ios:sync': 'cap sync ios',
           'ios:open': 'cap open ios',
           'ios:assets': 'capacitor-assets generate --ios',
@@ -122,8 +131,16 @@ export async function buildIosProject(tenant: Tenant, app: TenantApp): Promise<I
   if (icon) zip.file('resources/icon.png', icon);
   if (splash) zip.file('resources/splash.png', splash);
 
+  // Versão do iOS: MARKETING_VERSION (CFBundleShortVersionString) e
+  // CURRENT_PROJECT_VERSION (CFBundleVersion) no projeto do Xcode.
+  zip.file(
+    'versao-ios.json',
+    `${JSON.stringify({ versionName: version.version_name, buildNumber: version.version_code }, null, 2)}\n`,
+  );
+  zip.file('versao-ios.cjs', IOS_VERSION_SCRIPT);
+
   zip.file('.gitignore', 'node_modules/\nios/App/Pods/\nios/App/App/public/\n');
-  zip.file('LEIA-ME.md', readme(tenant, app, origin));
+  zip.file('LEIA-ME.md', readme(tenant, app, origin, version));
 
   const buffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
   return { filename: `${app.package_id}-ios.zip`, zip: buffer };
@@ -143,7 +160,7 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 }
 
-function readme(tenant: Tenant, app: TenantApp, origin: string) {
+function readme(tenant: Tenant, app: TenantApp, origin: string, version: Version) {
   return `# ${app.app_name} — aplicativo iOS
 
 Projeto Capacitor do provedor **${tenant.name}**, gerado pelo painel LinkHub.
@@ -154,7 +171,7 @@ O app abre ${origin} numa WKWebView em tela cheia.
 Precisa de Xcode 16 ou mais novo, Node 20+ e CocoaPods.
 
     npm install
-    npx cap add ios            # gera o projeto do Xcode
+    npm run ios:add            # gera o projeto do Xcode e grava a versão
     npx capacitor-assets generate --ios   # ícones e splash a partir de resources/
     npx cap sync ios
     npx cap open ios
@@ -164,7 +181,11 @@ troque o destino para *Any iOS Device*, e então *Product → Archive →
 Distribute App → App Store Connect*.
 
 Identificador do pacote: \`${app.package_id}\`
-Versão: \`${app.version_name}\` (build ${app.version_code})
+Versão: \`${version.version_name}\` (build ${version.version_code})
+
+A versão já vai gravada no projeto pelo \`npm run ios:add\`. Se o projeto do
+Xcode já existia, rode \`npm run ios:version\`. Cada download deste zip
+reserva um número de build novo: a App Store recusa número repetido.
 
 ## Antes de submeter — leia isto
 

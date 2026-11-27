@@ -18,6 +18,20 @@ export interface TenantApp {
   keystore_alias: string;
   keystore_sha256: string | null;
   play_signing_sha256: string | null;
+  /** Maior versionCode enviado à loja fora do LinkHub (migração 014). */
+  store_version_floor: number;
+  store_version_name: string | null;
+  /** Versão escolhida para o próximo build. Nula = automático. */
+  next_version_name: string | null;
+  /** Certificado público da chave de upload, em PEM. */
+  upload_cert_pem: string | null;
+  ios_build_number: number;
+  ios_version_name: string;
+  ios_next_version_name: string | null;
+  migration_enabled: boolean;
+  migration_pem_downloaded_at: string | null;
+  migration_reset_requested_at: string | null;
+  migration_reset_approved_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +47,9 @@ export interface AppBuild {
   artifact_bytes: number | null;
   run_url: string | null;
   error: string | null;
+  published_at: string | null;
+  published_by: string | null;
+  upload_sha256: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -70,7 +87,7 @@ export function appDefaults(tenant: Tenant): TenantApp {
     tenant_id: tenant.id,
     app_name: defaultAppName(tenant),
     package_id: defaultPackageId(tenant),
-    version_code: 1,
+    version_code: 0,
     version_name: '1.0.0',
     icon_url: null,
     theme_color: null,
@@ -80,6 +97,17 @@ export function appDefaults(tenant: Tenant): TenantApp {
     keystore_alias: 'linkhub',
     keystore_sha256: null,
     play_signing_sha256: null,
+    store_version_floor: 0,
+    store_version_name: null,
+    next_version_name: null,
+    upload_cert_pem: null,
+    ios_build_number: 0,
+    ios_version_name: '1.0.0',
+    ios_next_version_name: null,
+    migration_enabled: false,
+    migration_pem_downloaded_at: null,
+    migration_reset_requested_at: null,
+    migration_reset_approved_at: null,
     created_at: now,
     updated_at: now,
   };
@@ -100,14 +128,4 @@ export function themeColorOf(tenant: Tenant, app: TenantApp | null) {
 
 export function backgroundColorOf(tenant: Tenant, app: TenantApp | null) {
   return app?.background_color ?? (tenant.dark_mode_default ? '#0f1017' : '#ffffff');
-}
-
-/** Próxima versão: a Play exige versionCode maior a cada envio. */
-export function nextVersion(app: TenantApp) {
-  const parts = app.version_name.split('.').map((n) => Number.parseInt(n, 10) || 0);
-  const patch = (parts[2] ?? 0) + 1;
-  return {
-    version_code: app.version_code + 1,
-    version_name: `${parts[0] ?? 1}.${parts[1] ?? 0}.${patch}`,
-  };
 }

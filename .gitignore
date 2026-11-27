@@ -23,3 +23,7 @@ supabase/.temp
 
 # artefato de build do TypeScript
 tsconfig.tsbuildinfo
+
+# Recifragem das keystores: backup local e chaves de produção
+backups/
+.env.producao
