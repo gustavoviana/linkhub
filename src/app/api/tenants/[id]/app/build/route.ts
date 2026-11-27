@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireTenantApi } from '@/lib/auth/api-guard';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitResponse } from '@/lib/rate-limit-shared';
 import { ensureTenantApp, finishBuild, reserveBuild, APP_TABLE_MISSING } from '@/lib/tenant/app-store-db';
 import { tenantOrigin } from '@/lib/tenant/app-config';
 import { nextVersion } from '@/lib/tenant/app-version';
@@ -39,13 +39,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Cada build ocupa um runner por 5 a 10 minutos. Seis por hora por
   // provedor sobra para o uso normal e corta o clique repetido.
-  const limit = rateLimit(`app-build:${id}`, 6, 60 * 60_000);
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { error: `Muitos builds seguidos. Tente de novo em ${Math.ceil(limit.retryAfterSeconds / 60)} min.` },
-      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
-    );
-  }
+  const limited = await rateLimitResponse(
+    `app-build:${id}`,
+    6,
+    60 * 60_000,
+    (s) => `Muitos builds seguidos. Tente de novo em ${Math.ceil(s / 60)} min.`,
+  );
+  if (limited) return limited;
 
   const token = process.env.GITHUB_DISPATCH_TOKEN;
   if (!token) {

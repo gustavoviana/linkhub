@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { requireTenantApi } from '@/lib/auth/api-guard';
 import { auditApp } from '@/lib/tenant/app-audit';
+import { rateLimitResponse } from '@/lib/rate-limit-shared';
 
 // "Marcar como publicado na loja". Só super administrador.
 //
@@ -24,6 +25,14 @@ export async function POST(
   if (!auth.viaPlatform) {
     return NextResponse.json({ error: 'Só o super administrador marca um build como publicado.' }, { status: 403 });
   }
+
+  const limited = await rateLimitResponse(
+    `app-published:${auth.userId}`,
+    20,
+    10 * 60_000,
+    () => 'Muitas marcações seguidas. Tente de novo em alguns minutos.',
+  );
+  if (limited) return limited;
 
   // Filtro por tenant_id: o build tem que ser deste provedor.
   const { data, error } = await auth.admin

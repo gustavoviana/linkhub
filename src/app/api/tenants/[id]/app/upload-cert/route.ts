@@ -1,7 +1,7 @@
 import { X509Certificate } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { requireTenantApi } from '@/lib/auth/api-guard';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitResponse } from '@/lib/rate-limit-shared';
 import { auditApp } from '@/lib/tenant/app-audit';
 
 // Certificado público da chave de upload, em PEM. É o equivalente a
@@ -18,13 +18,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const auth = await requireTenantApi(id, 'owner');
   if (auth.error) return auth.error;
 
-  const limit = rateLimit(`upload-cert:${id}:${auth.userId}`, 10, 10 * 60_000);
-  if (!limit.allowed) {
-    return NextResponse.json(
-      { error: 'Muitos downloads seguidos. Tente de novo em alguns minutos.' },
-      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
-    );
-  }
+  const limited = await rateLimitResponse(
+    `upload-cert:${id}:${auth.userId}`,
+    10,
+    10 * 60_000,
+    () => 'Muitos downloads seguidos. Tente de novo em alguns minutos.',
+  );
+  if (limited) return limited;
 
   const { data } = await auth.admin
     .from('tenant_apps')

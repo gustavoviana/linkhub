@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireTenantAdmin } from '@/lib/auth/tenant-access';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { asTenantOrNull } from '@/lib/supabase/helpers';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitResponse } from '@/lib/rate-limit-shared';
 import { ensureTenantApp, finishBuild, reserveBuild, APP_TABLE_MISSING } from '@/lib/tenant/app-store-db';
 import { nextIosVersion } from '@/lib/tenant/app-version';
 import { auditApp } from '@/lib/tenant/app-audit';
@@ -21,10 +21,13 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const access = await requireTenantAdmin(id);
 
-  const limit = rateLimit(`app-ios:${id}`, 10, 60 * 60_000);
-  if (!limit.allowed) {
-    return NextResponse.json({ error: 'Muitos downloads seguidos. Tente de novo mais tarde.' }, { status: 429 });
-  }
+  const limited = await rateLimitResponse(
+    `app-ios:${id}`,
+    10,
+    60 * 60_000,
+    () => 'Muitos downloads seguidos. Tente de novo mais tarde.',
+  );
+  if (limited) return limited;
 
   const supabase = createAdminClient();
   const { data } = await supabase.from('tenants').select('*').eq('id', id).single();
