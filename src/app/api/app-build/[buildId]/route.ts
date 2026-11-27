@@ -15,10 +15,16 @@ import { backgroundColorOf, tenantOrigin, themeColorOf, type TenantApp } from '@
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
+// O passe só vale enquanto o build está vivo. Depois de "done" ou "error",
+// quem achar o passe num log não consegue mais ler a keystore nem trocá-la.
+const LIVE = new Set(['queued', 'running']);
+
 async function authorize(req: NextRequest, buildId: string) {
   const token = new URL(req.url).searchParams.get('token');
   if (!verifyBuildToken(buildId, token)) return null;
-  return getBuild(buildId);
+  const build = await getBuild(buildId);
+  if (!build || !LIVE.has(build.status)) return null;
+  return build;
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ buildId: string }> }) {
